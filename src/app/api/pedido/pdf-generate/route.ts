@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         
         // Título principal
         doc.setFontSize(20);
-        doc.setTextColor(...primaryColor);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
         doc.text('Reporte de Pedidos por Producto', 105, 20, { align: 'center' });
         
         // Fecha de generación
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         
         // Información del producto
         doc.setFontSize(14);
-        doc.setTextColor(...primaryColor);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
         doc.text('Información del Producto', 20, yPosition);
         yPosition += 10;
         
@@ -61,9 +61,9 @@ export async function POST(request: NextRequest) {
         ];
         
         productInfo.forEach(([label, value]) => {
-            doc.setFont(undefined, 'bold');
+            doc.setFont('helvetica', 'bold');
             doc.text(label, 20, yPosition);
-            doc.setFont(undefined, 'normal');
+            doc.setFont('helvetica', 'normal');
             doc.text(value, 50, yPosition);
             yPosition += 6;
         });
@@ -72,15 +72,15 @@ export async function POST(request: NextRequest) {
         
         // Sección de pedidos
         doc.setFontSize(14);
-        doc.setTextColor(...primaryColor);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
         doc.text('Pedidos que contienen este producto', 20, yPosition);
         yPosition += 10;
         
         if (orders.length > 0) {
             // Encabezados de la tabla
-            doc.setFillColor(...primaryColor);
+            doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
             doc.setTextColor(255, 255, 255);
-            doc.setFont(undefined, 'bold');
+            doc.setFont('helvetica', 'bold');
             
             const headers = ['Número', 'Estado', 'Cantidad', 'Fecha'];
             const columnWidths = [40, 35, 25, 35];
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
             
             // Datos de los pedidos
             doc.setTextColor(0, 0, 0);
-            doc.setFont(undefined, 'normal');
+            doc.setFont('helvetica', 'normal');
             
             orders.forEach((order: any, index: number) => {
                 // Verificar si hay espacio suficiente en la página
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
                 xPosition += 40;
                 
                 // Estado con fondo de color
-                doc.setFillColor(...statusColor);
+                doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
                 doc.rect(xPosition, yPosition - 3, 35, 6, 'F');
                 doc.setTextColor(0, 0, 0);
                 doc.text(statusText, xPosition + 2, yPosition);
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
             });
         } else {
             doc.setTextColor(100, 100, 100);
-            doc.setFont(undefined, 'italic');
+            doc.setFont('helvetica', 'italic');
             doc.text('No hay pedidos que contengan este producto', 20, yPosition);
         }
         

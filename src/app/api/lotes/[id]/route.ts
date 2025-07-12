@@ -5,7 +5,7 @@ import prisma from '@/lib/db';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // Verificar autenticación
@@ -17,7 +17,7 @@ export async function GET(
             );
         }
 
-        const { id } = params;
+        const { id } = await params;
 
         // Obtener el lote con sus items y contenedores
         const batch = await prisma.batch.findUnique({

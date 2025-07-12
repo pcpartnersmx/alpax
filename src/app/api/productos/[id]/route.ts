@@ -4,10 +4,10 @@ import prisma from '@/lib/db';
 // GET - Obtener un producto específico por ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const product = await prisma.product.findUnique({
       where: { id },
@@ -54,10 +54,10 @@ export async function GET(
 // PUT - Actualizar un producto específico
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { name, code, area, description } = body;
 
@@ -148,10 +148,10 @@ export async function PUT(
 // DELETE - Eliminar un producto específico
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Verificar si el producto existe
     const existingProduct = await prisma.product.findUnique({

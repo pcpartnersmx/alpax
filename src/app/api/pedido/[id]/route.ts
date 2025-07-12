@@ -5,7 +5,7 @@ import prisma from '@/lib/db';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // Verificar autenticación
@@ -17,7 +17,7 @@ export async function GET(
             );
         }
 
-        const { id } = params;
+        const { id } = await params;
 
         // Obtener el pedido con todos sus detalles
         const order = await prisma.order.findUnique({
@@ -76,7 +76,7 @@ export async function GET(
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // Verificar autenticación
@@ -88,7 +88,7 @@ export async function PUT(
             );
         }
 
-        const { id } = params;
+        const { id } = await params;
         const body = await request.json();
         const { status, orderNotes } = body;
 
@@ -158,7 +158,7 @@ export async function PUT(
 
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // Verificar autenticación
@@ -170,7 +170,7 @@ export async function DELETE(
             );
         }
 
-        const { id } = params;
+        const { id } = await params;
 
         // Verificar que el pedido existe
         const existingOrder = await prisma.order.findUnique({

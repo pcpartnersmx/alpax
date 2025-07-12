@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import AuthWrapper from "./components/AuthWrapper";
+import Gleap from 'gleap';
+import GleapComponent from "./components/GleapComponent";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +39,7 @@ export default function RootLayout({
               {children}
           </AuthWrapper>
         </Providers>
+        <GleapComponent />
       </body>
     </html>
   );

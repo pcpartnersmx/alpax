@@ -10,9 +10,10 @@ import Select from './Essentials/Select'
 import Table from './Essentials/Table'
 import TagsInput from './Essentials/TagsInput'
 import { Combobox } from './ui/combobox'
-import { FaFile, FaFileUpload, FaPlus, FaTrash } from 'react-icons/fa'
+import { FaFile, FaFileUpload, FaPlus, FaSpinner, FaTrash, FaTimes } from 'react-icons/fa'
 import { useOrders } from '@/hooks/useOrders'
 import { useBatches } from '@/hooks/useBatches'
+import AssignmentSummaryModal from './AssignmentSummaryModal'
 
 
 const Navbar = () => {
@@ -97,7 +98,7 @@ const Navbar = () => {
         if (formData.producto) {
             // Check if product already exists in the list
             const existingProduct = loteItems.find(item => item.id === formData.producto);
-            
+
             if (!existingProduct) {
                 // Add new product immediately when selected (empty)
                 const productoObj = productos.find(p => p.id === formData.producto);
@@ -122,11 +123,11 @@ const Navbar = () => {
     useEffect(() => {
         if (formData.producto) {
             const existingProductIndex = loteItems.findIndex(item => item.id === formData.producto);
-            
+
             if (existingProductIndex !== -1) {
                 // Update existing product
-                setLoteItems(prev => prev.map((item, index) => 
-                    index === existingProductIndex 
+                setLoteItems(prev => prev.map((item, index) =>
+                    index === existingProductIndex
                         ? {
                             ...item,
                             lote: formData.lote,
@@ -203,17 +204,17 @@ const Navbar = () => {
             errors.contenedores = 'Debe agregar al menos un contenedor';
             valid = false;
         }
-        
+
         if (!valid) return;
 
         const productoObj = productos.find(p => p.id === formData.producto);
-        
+
         // Verificar si el producto ya existe en el lote
         const productExists = loteItems.some(item => item.id === formData.producto);
         if (productExists) {
             return; // No agregar si ya existe
         }
-        
+
         setLoteItems(prev => [
             ...prev,
             {
@@ -225,7 +226,7 @@ const Navbar = () => {
                 id: formData.producto
             }
         ]);
-        
+
         // Limpiar el formulario
         setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
         setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
@@ -262,9 +263,9 @@ const Navbar = () => {
                 description: `Lote creado el ${new Date().toLocaleString()}`,
                 items: loteItems.map(item => ({
                     productId: item.id,
-                    quantity: parseInt(item.cantidad)
-                })),
-                containers: loteItems.flatMap(item => item.contenedores)
+                    quantity: parseInt(item.cantidad),
+                    containers: item.contenedores // Cada item tiene sus propios contenedores
+                }))
             };
 
             const result = await createBatch(batchData);
@@ -276,9 +277,28 @@ const Navbar = () => {
                 setLoteItems([]);
                 setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
                 setBatchNumber('');
-                
-                // Mostrar mensaje de éxito
-                toast.success('Lote creado exitosamente');
+
+                // Mostrar mensaje de éxito con información de asignaciones
+                let successMessage = 'Lote creado exitosamente';
+
+                if (result.data?.assignments && result.data.assignments.length > 0) {
+                    const totalAssigned = result.data.assignments.reduce((sum: number, assignment: any) =>
+                        sum + assignment.assignedQuantity, 0
+                    );
+
+                    if (totalAssigned > 0) {
+                        successMessage += `\nSe asignaron automáticamente ${totalAssigned.toLocaleString()} unidades a pedidos pendientes`;
+
+                        // Mostrar modal con detalles de asignaciones
+                        setAssignmentData({
+                            assignments: result.data.assignments,
+                            batchNumber: result.data.batchNumber
+                        });
+                        setShowAssignmentModal(true);
+                    }
+                }
+
+                toast.success(successMessage);
             } else {
                 // Mostrar error
                 toast.error(`Error al crear el lote: ${result.error}`);
@@ -310,12 +330,12 @@ const Navbar = () => {
             errors.cantidad = 'Ingrese una cantidad válida';
             valid = false;
         }
-        
+
         setPedidoErrors(errors);
         if (!valid) return;
 
         const productoObj = productos.find(p => p.id === pedidoForm.producto);
-        
+
         setPedidoItems(prev => [
             ...prev,
             {
@@ -332,7 +352,9 @@ const Navbar = () => {
     };
 
     const handleRemovePedidoItem = (index: number) => {
+        const removedItem = pedidoItems[index];
         setPedidoItems(prev => prev.filter((_, i) => i !== index));
+        toast.success(`Producto "${removedItem.producto}" eliminado del pedido`);
     };
 
     const handleSubmitPedido = async () => {
@@ -341,7 +363,7 @@ const Navbar = () => {
             setPedidoErrors(prev => ({ ...prev, numeroPedido: 'El número de pedido es requerido' }));
             return;
         }
-        
+
         // Validar que haya productos en el pedido
         if (pedidoItems.length === 0) {
             alert('Debe agregar al menos un producto al pedido');
@@ -370,7 +392,9 @@ const Navbar = () => {
                 setPedidoErrors({ numeroPedido: '', producto: '', cantidad: '' });
                 setArchivoPDF(null);
                 setArchivoNombre("");
-                
+                setPdfString(null);
+                setPdfAnalysis(null);
+
                 // Mostrar mensaje de éxito
                 toast.success('Pedido creado exitosamente');
             } else {
@@ -398,67 +422,126 @@ const Navbar = () => {
     };
 
     const handleDrop = async (e: React.DragEvent) => {
+        console.log("mandando pdf")
         e.preventDefault();
         setIsDragOver(false);
-        
+
         const files = Array.from(e.dataTransfer.files);
         const pdfFile = files.find(file => file.type === 'application/pdf');
-        
+
         if (pdfFile) {
             setArchivoPDF(pdfFile);
             setArchivoNombre(pdfFile.name);
-            
+
             // Crear FormData para enviar el archivo
             const formData = new FormData();
             formData.append('file', pdfFile);
-            
-            try {
-                const response = await fetch('/api/pedido/pdf', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                console.log('Respuesta del servidor (drop):', data);
-                
-                if (data.success) {
-                    console.log('Archivo procesado correctamente:', data.fileName);
-                } else {
-                    console.error('Error procesando archivo:', data.error);
+
+                            try {
+                    setPdfStringLoading(true);
+                    const response = await fetch('/api/pedido/pdf', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        setPdfString(data.fullText);
+                        setPdfAnalysis(data.analysis);
+                    } else {
+                        setPdfString(null);
+                        setPdfAnalysis(null);
+                        console.error('Error procesando archivo:', data.error);
+                        toast.error('Error procesando el PDF');
+                    }
+                } catch (error) {
+                    setPdfString(null);
+                    setPdfAnalysis(null);
+                    console.error('Error enviando archivo:', error);
+                    toast.error('Error enviando el archivo');
+                } finally {
+                    setPdfStringLoading(false);
                 }
-            } catch (error) {
-                console.error('Error enviando archivo:', error);
-            }
         } else {
             alert('Por favor, arrastra solo archivos PDF');
         }
     };
 
+
+
+    const [pdfString, setPdfString] = useState<string | null>(null);
+    const [pdfAnalysis, setPdfAnalysis] = useState<any>(null);
+    const [pdfStringLoading, setPdfStringLoading] = useState<boolean>(false);
+    const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+    const [assignmentData, setAssignmentData] = useState<any>(null);
+
+
+
+
+
+
+    // Auto-fill form when PDF analysis is complete
+    useEffect(() => {
+        if (pdfAnalysis && pdfAnalysis.orden && pdfAnalysis.productos) {
+            // Set order number
+            setPedidoForm(prev => ({ ...prev, numeroPedido: pdfAnalysis.orden.toString() }));
+            
+            // Add products to the list
+            const newPedidoItems = pdfAnalysis.productos.map((producto: any) => {
+                const productoObj = productos.find(p => p.code === producto.codigo);
+                return {
+                    producto: productoObj ? productoObj.name : producto.codigo,
+                    cantidad: producto.cantidad.toString(),
+                    codigo: producto.codigo,
+                    id: productoObj ? productoObj.id : ''
+                };
+            }).filter((item: any) => item.id); // Only add products that exist in our database
+            
+            setPedidoItems(newPedidoItems);
+            
+            // Clear the PDF string to show the form
+            setPdfString(null);
+            
+            // Show success message
+            toast.success(`PDF analizado: Orden ${pdfAnalysis.orden} con ${pdfAnalysis.productos.length} productos`);
+        }
+    }, [pdfAnalysis, productos]);
+
+
+
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        console.log("mandando pdf")
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             if (file.type === 'application/pdf') {
                 setArchivoPDF(file);
                 setArchivoNombre(file.name);
-                
+
                 // Crear FormData para enviar el archivo
                 const formData = new FormData();
                 formData.append('file', file);
-                
+
                 try {
+                    setPdfStringLoading(true);
                     const response = await fetch('/api/pedido/pdf', {
                         method: 'POST',
                         body: formData
                     });
                     const data = await response.json();
                     console.log('Respuesta del servidor:', data);
-                    
+
                     if (data.success) {
                         console.log('Archivo procesado correctamente:', data.fileName);
+                        setPdfString(data.fullText);
+                        setPdfAnalysis(data.analysis);
                     } else {
                         console.error('Error procesando archivo:', data.error);
+                        toast.error('Error procesando el PDF');
                     }
                 } catch (error) {
                     console.error('Error enviando archivo:', error);
+                    toast.error('Error enviando el archivo');
+                } finally {
+                    setPdfStringLoading(false);
                 }
             } else {
                 alert('Por favor, selecciona solo archivos PDF');
@@ -470,6 +553,8 @@ const Navbar = () => {
         }
     };
 
+    console.log('pdfString:', pdfString); // DEPURACIÓN: Verificar valor de pdfString
+
     return (
         <>
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm p-4 flex items-center justify-between">
@@ -480,10 +565,10 @@ const Navbar = () => {
                     </div>
                     {/* Menú */}
                     <div className="flex gap-8">
-                        <Link href="/" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Resumen</Link>
+                        <Link href="/resumen" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/resumen' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Resumen</Link>
                         <Link href="/pedidos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/pedidos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Pedidos</Link>
-                        <Link href="/bitacora" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/bitacora') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Bitácora</Link>
-                        <Link href="/productos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/productos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Productos</Link>
+                        <Link href="/" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Bitácora</Link>
+                        {/* <Link href="/productos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/productos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Productos</Link> */}
                     </div>
                 </div>
                 {/* Botones y avatar */}
@@ -538,195 +623,220 @@ const Navbar = () => {
                         setPedidoForm({ numeroPedido: '', producto: '', cantidad: '' });
                         setPedidoErrors({ numeroPedido: '', producto: '', cantidad: '' });
                         setPedidoItems([]);
+                        setPdfString(null);
+                        setPdfAnalysis(null);
+                        setArchivoPDF(null);
+                        setArchivoNombre("");
                     }}
                     size="md"
+                    className={`w-[800px]`}
                     body={
-                        <div className="w-full p-2 md:p-4 flex flex-col gap-6">
-                            {/* Número de pedido */}
-                            <div className="flex flex-col gap-1 text-start">
-                                {/* <label className="text-xs text-gray-600 font-semibold mb-1" htmlFor="numeroPedido">No. de Pedido</label> */}
-                                <Input
-                                    type="text"
-                                    name="numeroPedido"
-                                    label='No. de Pedido'
-                                    placeholder="Número de pedido"
-                                    defaultValue={pedidoForm.numeroPedido}
-                                    onChange={(value: string | number) => {
-                                        setPedidoForm(prev => ({ ...prev, numeroPedido: String(value) }));
-                                        setPedidoErrors(prev => ({ ...prev, numeroPedido: '' }));
-                                    }}
-                                    // className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-[#2A3182] focus:ring-2 focus:ring-[#2A3182]/20 transition w-full text-lg"
-                                />
-                                {pedidoErrors.numeroPedido && (
-                                    <span className="text-xs text-red-500 mt-1">{pedidoErrors.numeroPedido}</span>
-                                )}
-                            </div>
-                            {/* <hr className="my-2 border-gray-200" /> */}
-                            {/* Agregar producto */}
-                            <div className="flex flex-col gap-2">
-                                <div className="flex flex-col md:flex-row gap-2 items-end">
-                                    <div className="flex-1 flex flex-col gap-1">
-                                        {/* <label className="text-xs text-gray-600 font-semibold mb-1" htmlFor="producto">Producto</label> */}
-                                        <Select
-                                            label=""
-                                            options={loadingProductos ? [{ value: '', label: 'Cargando productos...' }] : productos.map(p => ({
-                                                value: p.id,
-                                                label: `${p.code} - ${p.name}`
-                                            }))}
-                                            name="producto"
-                                            id="producto"
-                                            value={pedidoForm.producto}
-                                            onChange={handlePedidoInputChange}
-                                            required={true}
-                                            className={`bg-gray-50 border border-gray-200 rounded-lg h-12 shadow-sm ${pedidoErrors.producto ? 'border-red-500' : ''}`}
-                                            disabled={isSubmitting || loadingProductos}
-                                            defaultValue=""
-                                            placeholder='Selecciona un producto'
-                                        />
-                                        {pedidoErrors.producto && (
-                                            <span className="text-xs text-red-500 mt-1">{pedidoErrors.producto}</span>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 flex flex-col gap-1">
-                                        {/* <label className="text-xs text-gray-600 font-semibold mb-1" htmlFor="cantidad">Cantidad</label> */}
-                                        <Input
-                                            label=" "
-                                            type="number"
-                                            name="cantidad"
-                                            placeholder="Ingrese la cantidad"
-                                            defaultValue={pedidoForm.cantidad}
-                                            onChange={(value: string | number) => {
-                                                setPedidoForm(prev => ({ ...prev, cantidad: String(value) }));
-                                                setPedidoErrors(prev => ({ ...prev, cantidad: '' }));
-                                            }}
-                                            // className={`bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-[#2A3182] focus:ring-2 focus:ring-[#2A3182]/20 transition w-full text-lg ${pedidoErrors.cantidad ? 'border-red-500' : ''}`}
-                                            disabled={isSubmitting}
-                                            min="1"
-                                        />
-                                        {pedidoErrors.cantidad && (
-                                            <span className="text-xs text-red-500 mt-1">{pedidoErrors.cantidad}</span>
-                                        )}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleAddPedidoItem}
-                                        className="bg-[#2A3182] w-12 h-12 flex-shrink-0 cursor-pointer hover:bg-[#232966] transition text-white rounded-lg flex items-center justify-center mt-0 md:mt-6 shadow-md"
-                                        title="Agregar producto al pedido"
-                                    >
-                                        <FaPlus size={20} />
-                                    </button>
+                        <div
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            className={`w-full h-full transition-all duration-200 ${isDragOver ? 'bg-blue-50 border-4 border-blue-400 shadow-2xl flex flex-col items-center justify-center min-h-[500px]' : ''}`}
+                        >
+                            {isDragOver ? (
+                                <div className="flex flex-col items-center justify-center w-full h-full py-24">
+                                    <FaFileUpload className="w-20 h-20 text-blue-400 mb-6 animate-bounce" />
+                                    <span className="text-2xl font-bold text-blue-700 mb-2">¡Suelta el archivo PDF aquí!</span>
+                                    <span className="text-lg text-blue-500">El pedido se adjuntará automáticamente</span>
                                 </div>
-                                {pedidoItems.length > 0 && (
-                                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700 flex items-center gap-2">
-                                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                                        {pedidoItems.length} producto{pedidoItems.length > 1 ? 's' : ''} agregado{pedidoItems.length > 1 ? 's' : ''}. Puedes continuar agregando más productos o crear el pedido.
-                                    </div>
-                                )}
-                            </div>
-                            {/* Tabla de productos agregados */}
-                            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-                                <table className="w-full text-sm">
-                                    <thead className="sticky top-0 bg-gray-100 z-10">
-                                        <tr>
-                                            <th className="px-3 py-2 text-start font-semibold">Código</th>
-                                            <th className="px-3 py-2 text-start font-semibold">Producto</th>
-                                            <th className="px-3 py-2 text-start font-semibold">Cantidad</th>
-                                            <th className="px-3 py-2 text-center font-semibold">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {pedidoItems.map((item, idx) => (
-                                            <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                                                <td className="px-3 py-2">{item.codigo}</td>
-                                                <td className="px-3 py-2">{item.producto}</td>
-                                                <td className="px-3 py-2">{item.cantidad}</td>
-                                                <td className="px-3 py-2 text-center">
-                                                    <button
-                                                        onClick={() => handleRemovePedidoItem(idx)}
-                                                        className="text-red-500 hover:text-red-700 p-1 rounded-full transition border border-transparent hover:border-red-200"
-                                                        title="Eliminar producto"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {pedidoItems.length > 0 && (
-                                            <tr className="border-t border-gray-200 bg-blue-50">
-                                                <td colSpan={2} className="px-3 py-2 font-semibold text-right">Total:</td>
-                                                <td className="px-3 py-2 font-semibold">{totalCantidad.toLocaleString()}</td>
-                                                <td></td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {/* Input de archivo y botones */}
-                            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mt-2">
-                                <div className="flex-1">
-                                    <div 
-                                        className={`flex flex-col items-center justify-center border-2 border-dashed border-gray-300 bg-gray-50 rounded-lg p-6 transition hover:border-[#2A3182] hover:bg-[#f5f7ff] text-center cursor-pointer ${
-                                            isDragOver ? 'border-blue-500 bg-blue-50' : ''
-                                        }`}
-                                        onDragOver={handleDragOver}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={handleDrop}
-                                        onClick={() => document.getElementById('archivoPDF')?.click()}
-                                    >
-                                        <FaFileUpload className={`w-8 h-8 mb-2 ${isDragOver ? 'text-blue-500' : 'text-[#2A3182]'}`} />
-                                        <span className={`font-semibold ${isDragOver ? 'text-blue-500' : 'text-[#2A3182]'}`}>
-                                            {isDragOver ? 'Suelta el archivo PDF aquí' : 'Cargar PDF'}
-                                        </span>
-                                        <span className="text-xs text-gray-500 mt-1">
-                                            {isDragOver ? 'Suelta para cargar' : '(Solo archivos .pdf)'}
-                                        </span>
-                                        <input
-                                            type="file"
-                                            id="archivoPDF"
-                                            name="archivoPDF"
-                                            accept="application/pdf"
-                                            className="hidden"
-                                            onChange={handleFileSelect}
-                                        />
-                                    </div>
-                                    {archivoNombre && (
-                                        <div className="mt-2 text-xs text-gray-700 flex items-center gap-2">
-                                            <FaFile className="w-4 h-4 text-[#2A3182]" />
-                                            <span className="truncate max-w-xs">{archivoNombre}</span>
+                            ) : <>
+                                {
+                                    pdfStringLoading ? (
+                                        <div className="flex flex-col items-center justify-center w-full h-full py-24">
+                                            <FaSpinner className="w-20 h-20 text-blue-400 mb-6 animate-spin" />
+                                            <span className="text-2xl font-bold text-blue-700 mb-2">Cargando archivo...</span>
                                         </div>
-                                    )}
-                                </div>
-                                <div className="flex gap-2 flex-wrap justify-end md:justify-end mt-2 md:mt-0">
-                                    {pedidoItems.length > 0 && (
-                                        <button
-                                            className="px-4 py-2 rounded-lg bg-red-100 text-red-600 font-semibold hover:bg-red-200 transition flex items-center gap-2"
-                                            onClick={() => {
-                                                setPedidoItems([]);
-                                                setPedidoForm({ numeroPedido: '', producto: '', cantidad: '' });
-                                                setPedidoErrors({ numeroPedido: '', producto: '', cantidad: '' });
-                                            }}
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                            Limpiar Todo
-                                        </button>
-                                    )}
-                                    <button
-                                        className="cursor-pointer px-4 py-2 rounded bg-gray-100 text-[#2A3182] font-semibold hover:bg-gray-200 transition"
-                                        onClick={() => setShowPedidoModal(false)}
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        className="cursor-pointer px-4 py-2 rounded bg-[#2A3182] text-white font-semibold hover:bg-[#232966] transition disabled:opacity-50"
-                                        onClick={handleSubmitPedido}
-                                        disabled={isSubmitting || orderLoading}
-                                    >
-                                        {isSubmitting || orderLoading ? 'Procesando...' : 'Crear Pedido'}
-                                    </button>
-                                </div>
-                            </div>
+                                    ) : (typeof pdfString === 'string') ? (
+                                        <div className="flex flex-col items-center justify-center w-full h-full py-24">
+                                            <FaSpinner className="w-20 h-20 text-blue-400 mb-6 animate-spin" />
+                                            <span className="text-2xl font-bold text-blue-700 mb-2">Analizando PDF...</span>
+                                            <span className="text-lg text-blue-500">Procesando con inteligencia artificial</span>
+                                        </div>
+                                    ) : (
+
+                                        <div
+                                            className="w-full p-2 md:p-4 flex flex-col gap-6">
+                                            {/* Número de pedido */}
+                                            <div className="flex flex-col gap-1 text-start">
+                                                <Input
+                                                    type="text"
+                                                    name="numeroPedido"
+                                                    label='No. de Pedido'
+                                                    placeholder="Número de pedido"
+                                                    defaultValue={pedidoForm.numeroPedido}
+                                                    onChange={(value: string | number) => {
+                                                        setPedidoForm(prev => ({ ...prev, numeroPedido: String(value) }));
+                                                        setPedidoErrors(prev => ({ ...prev, numeroPedido: '' }));
+                                                    }}
+                                                // className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-[#2A3182] focus:ring-2 focus:ring-[#2A3182]/20 transition w-full text-lg"
+                                                />
+                                                {pedidoErrors.numeroPedido && (
+                                                    <span className="text-xs text-red-500 mt-1">{pedidoErrors.numeroPedido}</span>
+                                                )}
+                                            </div>
+                                            {/* <hr className="my-2 border-gray-200" /> */}
+                                            {/* Agregar producto */}
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex flex-col md:flex-row gap-2 items-end">
+                                                    <div className="flex-1 flex flex-col gap-1">
+                                                        <Combobox
+                                                            items={loadingProductos ? [{ value: '', label: 'Cargando productos...' }] : productos.map(p => ({
+                                                                value: p.id,
+                                                                label: `${p.code} - ${p.name}`
+                                                            }))}
+                                                            value={pedidoForm.producto}
+                                                            onChange={(value) => {
+                                                                setPedidoForm(prev => ({ ...prev, producto: value }));
+                                                                setPedidoErrors(prev => ({ ...prev, producto: '' }));
+                                                            }}
+                                                            placeholder="Selecciona un producto"
+                                                        />
+                                                        {pedidoErrors.producto && (
+                                                            <span className="text-xs text-red-500 mt-1">{pedidoErrors.producto}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 flex flex-col gap-1">
+                                                        {/* <label className="text-xs text-gray-600 font-semibold mb-1" htmlFor="cantidad">Cantidad</label> */}
+                                                        <Input
+                                                            label=" "
+                                                            type="number"
+                                                            name="cantidad"
+                                                            placeholder="Ingrese la cantidad"
+                                                            defaultValue={pedidoForm.cantidad}
+                                                            onChange={(value: string | number) => {
+                                                                setPedidoForm(prev => ({ ...prev, cantidad: String(value) }));
+                                                                setPedidoErrors(prev => ({ ...prev, cantidad: '' }));
+                                                            }}
+                                                            // className={`bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-[#2A3182] focus:ring-2 focus:ring-[#2A3182]/20 transition w-full text-lg ${pedidoErrors.cantidad ? 'border-red-500' : ''}`}
+                                                            disabled={isSubmitting}
+                                                            min="1"
+                                                        />
+                                                        {pedidoErrors.cantidad && (
+                                                            <span className="text-xs text-red-500 mt-1">{pedidoErrors.cantidad}</span>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAddPedidoItem}
+                                                        className="bg-[#2A3182] w-12 h-12 flex-shrink-0 cursor-pointer hover:bg-[#232966] transition text-white rounded-lg flex items-center justify-center mt-0 md:mt-6 shadow-md"
+                                                        title="Agregar producto al pedido"
+                                                    >
+                                                        <FaPlus size={20} />
+                                                    </button>
+                                                </div>
+                                                {pedidoItems.length > 0 && (
+                                                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700 flex items-center gap-2">
+                                                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                                        {pedidoItems.length} producto{pedidoItems.length > 1 ? 's' : ''} agregado{pedidoItems.length > 1 ? 's' : ''}
+                                                        {pdfAnalysis && (
+                                                            <span className="text-green-600 font-medium"> (desde PDF)</span>
+                                                        )}
+                                                        . Puedes continuar agregando más productos o crear el pedido.
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {/* Tabla de productos agregados */}
+                                            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm max-h-[200px] overflow-y-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead className="sticky top-0 bg-gray-100 z-10">
+                                                        <tr>
+                                                            <th className="px-3 py-2 text-start font-semibold">Código</th>
+                                                            <th className="px-3 py-2 text-start font-semibold">Producto</th>
+                                                            <th className="px-3 py-2 text-start font-semibold">Cantidad</th>
+                                                            <th className="px-3 py-2 text-center font-semibold">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pedidoItems.map((item, idx) => (
+                                                            <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                                                                <td className="px-3 py-2">{item.codigo}</td>
+                                                                <td className="px-3 py-2 text-start">{item.producto}</td>
+                                                                <td className="px-3 py-2">{Number(item.cantidad).toLocaleString()}</td>
+                                                                <td className="px-3 py-2 text-center">
+                                                                    <button
+                                                                        onClick={() => handleRemovePedidoItem(idx)}
+                                                                        className="text-red-500 hover:text-red-700 p-1 rounded-full transition border border-transparent hover:border-red-200"
+                                                                        title="Eliminar producto"
+                                                                    >
+                                                                        <FaTrash className="w-5 h-5" />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {pedidoItems.length > 0 && (
+                                                            <tr className="border-t border-gray-200 bg-blue-50">
+                                                                <td colSpan={2} className="px-3 py-2 font-semibold text-right">Total:</td>
+                                                                <td className="px-3 py-2 font-semibold">{totalCantidad.toLocaleString()}</td>
+                                                                <td></td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            {/* Input de archivo y botones */}
+                                            <div
+                                                className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mt-2">
+                                                <div className="flex-1">
+                                                </div>
+
+                                                <div className="flex gap-2 flex-wrap justify-end md:justify-end mt-2 md:mt-0">
+                                                    {pedidoItems.length > 0 && (
+                                                        <button
+                                                            className="px-4 py-2 rounded-lg bg-red-100 text-red-600 font-semibold hover:bg-red-200 transition flex items-center gap-2"
+                                                            onClick={() => {
+                                                                setPedidoItems([]);
+                                                                setPedidoForm({ numeroPedido: '', producto: '', cantidad: '' });
+                                                                setPedidoErrors({ numeroPedido: '', producto: '', cantidad: '' });
+                                                                setPdfString(null);
+                                                                setPdfAnalysis(null);
+                                                                setArchivoPDF(null);
+                                                                setArchivoNombre("");
+                                                            }}
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                            Limpiar Todo
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        className="cursor-pointer px-4 py-2 rounded bg-gray-100 text-[#2A3182] font-semibold hover:bg-gray-200 transition"
+                                                        onClick={() => setShowPedidoModal(false)}
+                                                    >
+                                                        Cancelar
+                                                    </button>
+
+                                                    <div className='flex flex-col gap-2'>
+                                                        <input type="file" name="archivoPDF" id="archivoPDF" accept="application/pdf" className="hidden" onChange={handleFileSelect} />
+                                                        <button 
+                                                            className={`font-semibold px-4 py-2 rounded cursor-pointer transition flex items-center gap-2 ${
+                                                                pdfAnalysis 
+                                                                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                                                                    : archivoPDF 
+                                                                    ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                                                                    : 'bg-red-600 text-white hover:bg-red-700'
+                                                            }`} 
+                                                            onClick={() => document.getElementById('archivoPDF')?.click()}
+                                                        >
+                                                            <FaFileUpload className="text-white" />
+                                                            {pdfAnalysis ? 'PDF ✓' : archivoPDF ? 'PDF ⏳' : 'PDF'}
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        className="cursor-pointer px-4 py-2 rounded bg-[#2A3182] text-white font-semibold hover:bg-[#232966] transition disabled:opacity-50"
+                                                        onClick={handleSubmitPedido}
+                                                        disabled={isSubmitting || orderLoading}
+                                                    >
+                                                        {isSubmitting || orderLoading ? 'Procesando...' : 'Crear Pedido'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                            </>}
                         </div>
                     }
                 />
@@ -749,7 +859,7 @@ const Navbar = () => {
                     body={
                         <div className="w-full p-2">
                             {/* Número de lote */}
-                            <div className="mb-4">
+                            {/* <div className="mb-4">
                                 <Input
                                     label="Número de Lote"
                                     type="text"
@@ -758,7 +868,7 @@ const Navbar = () => {
                                     onChange={(value: string | number) => setBatchNumber(String(value))}
                                     className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-[#2A3182] focus:ring-2 focus:ring-[#2A3182]/20 transition w-full text-lg"
                                 />
-                            </div>
+                            </div> */}
                             {/* Formulario para agregar productos */}
                             <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
@@ -772,7 +882,7 @@ const Navbar = () => {
                                         onChange={(value) => {
                                             // Check if this product already exists
                                             const existingProduct = loteItems.find(item => item.id === value);
-                                            
+
                                             if (existingProduct) {
                                                 // Load existing product data
                                                 setFormData({
@@ -890,11 +1000,10 @@ const Navbar = () => {
                                             </thead>
                                             <tbody>
                                                 {loteItems.map((item, idx) => (
-                                                    <tr 
-                                                        key={idx} 
-                                                        className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} cursor-pointer hover:bg-blue-50 transition-colors ${
-                                                            formData.producto === item.id ? "!bg-blue-100 border-l-4 border-blue-500" : ""
-                                                        }`}
+                                                    <tr
+                                                        key={idx}
+                                                        className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} cursor-pointer hover:bg-blue-50 transition-colors ${formData.producto === item.id ? "!bg-blue-100 border-l-4 border-blue-500" : ""
+                                                            }`}
                                                         onClick={() => handleEditLoteItem(idx)}
                                                         title="Haz clic para editar este producto"
                                                     >
@@ -997,6 +1106,19 @@ const Navbar = () => {
                             </div>
                         </div>
                     }
+                />
+            )}
+
+            {/* Modal de Resumen de Asignaciones */}
+            {showAssignmentModal && assignmentData && (
+                <AssignmentSummaryModal
+                    isOpen={showAssignmentModal}
+                    onClose={() => {
+                        setShowAssignmentModal(false);
+                        setAssignmentData(null);
+                    }}
+                    assignments={assignmentData.assignments}
+                    batchNumber={assignmentData.batchNumber}
                 />
             )}
         </>

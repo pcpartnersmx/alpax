@@ -1,201 +1,280 @@
-'use client'
 
-import { useState, useEffect } from 'react'
+"use client"
+import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useProducts } from '@/hooks/useProducts'
-import { useOrders } from '@/hooks/useOrders'
-import { Product } from '@/hooks/useProducts'
-import { Order } from '@/types/pedido'
+import Table from './components/Essentials/Table'
+import Input from './components/Essentials/Input'
+import Select from './components/Essentials/Select'
+import { FaSearch, FaFileAlt, FaEdit, FaTrash, FaExclamationTriangle, FaFile, FaPen, FaLink } from 'react-icons/fa'
+import { useAssignments } from '@/hooks/useAssignments'
 
-function DownloadIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline align-middle"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-  )
+// Definir tipos para los datos
+interface Product {
+  id: string
+  name: string
+  code: string
+  description: string
+  area: {
+    id: string
+    name: string
+    description: string
+    status: string
+  }
 }
 
-function RefreshIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline align-middle"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0 0 20.49 15" /></svg>
-  )
+interface BatchItem {
+  id: string
+  quantity: number
+  product: Product
 }
 
-// Skeleton loader component for products table
-const ProductsTableSkeleton = () => (
-  <div className="space-y-3">
-    {[...Array(6)].map((_, index) => (
-      <motion.div
-        key={index}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: index * 0.1 }}
-        className="flex items-center space-x-4 p-4 bg-gray-100 rounded-lg"
-      >
-        <div className="h-4 bg-gray-300 rounded w-20 animate-pulse"></div>
-        <div className="h-4 bg-gray-300 rounded w-32 animate-pulse"></div>
-        <div className="h-4 bg-gray-300 rounded w-24 animate-pulse"></div>
-        <div className="h-4 bg-gray-300 rounded w-40 animate-pulse"></div>
-      </motion.div>
-    ))}
-  </div>
-)
+interface Container {
+  id: string
+  containerCode: string
+  name: string
+  description: string
+  batchItems: BatchItem[]
+}
 
-// Skeleton loader component for orders table
-const OrdersTableSkeleton = () => (
-  <div className="space-y-3">
-    {[...Array(4)].map((_, index) => (
-      <motion.div
-        key={index}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: index * 0.1 }}
-        className="flex items-center space-x-4 p-4 bg-gray-100 rounded-lg"
-      >
-        <div className="h-4 bg-gray-300 rounded w-24 animate-pulse"></div>
-        <div className="h-4 bg-gray-300 rounded w-20 animate-pulse"></div>
-        <div className="h-4 bg-gray-300 rounded w-16 animate-pulse"></div>
-        <div className="h-4 bg-gray-300 rounded w-20 animate-pulse"></div>
-      </motion.div>
-    ))}
-  </div>
-)
+interface Batch {
+  id: string
+  batchNumber: string
+  name: string
+  description: string
+  status: string
+  createdAt: string
+  updatedAt: string
+  containers: Container[]
+}
 
-export default function ResumenPage() {
-  const { getProducts, loading: productsLoading } = useProducts()
-  const { getOrders, loading: ordersLoading } = useOrders()
+interface SalidasData {
+  batches: Batch[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
 
-  const [products, setProducts] = useState<Product[]>([])
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [orders, setOrders] = useState<Order[]>([])
+interface TableRow {
+  folio: string
+  area: string
+  clave: string
+  pedido: string
+  lote: string
+  fecha: string
+  hora: string
+  cantidad: number
+  id: string
+  productId: string
+}
+
+const page = () => {
+  const [salidas, setSalidas] = useState<SalidasData | null>(null)
+  const [filteredData, setFilteredData] = useState<TableRow[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filtroFecha, setFiltroFecha] = useState('')
+  const [filtroClave, setFiltroClave] = useState('')
+  const [filtroPedido, setFiltroPedido] = useState('')
+  const [filtroLote, setFiltroLote] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [selectedBatchItem, setSelectedBatchItem] = useState<any>(null)
+  const [pendingOrders, setPendingOrders] = useState<any[]>([])
+  const [selectedOrderItem, setSelectedOrderItem] = useState<any>(null)
+  const [assignQuantity, setAssignQuantity] = useState('')
+  
+  const { getPendingOrders, assignBatchToOrder, loading: assignLoading } = useAssignments()
 
-  // Fetch products and all orders on component mount
+  const getSalidas = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch("/api/lotes")
+      const { data } = await response.json()
+      setSalidas(data)
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        // Fetch products
-        const productsResponse = await getProducts()
-        if (productsResponse.success) {
-          setProducts(productsResponse.data)
-        } else {
-          console.error('Error fetching products:', productsResponse.error)
-        }
-
-        // Fetch all orders (without product filter)
-        const ordersResponse = await getOrders({})
-        if (ordersResponse.success) {
-          setOrders(ordersResponse.data)
-        } else {
-          console.error('Error fetching orders:', ordersResponse.error)
-          setOrders([])
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
+    getSalidas()
   }, [])
-
-  // Fetch orders when a product is selected
-  const handleProductClick = async (product: Product) => {
-    setSelectedProduct(product)
-    setLoading(true)
-
-    try {
-      const response = await getOrders({ productId: product.id })
-      if (response.success) {
-        setOrders(response.data)
-      } else {
-        console.error('Error fetching orders:', response.error)
-        setOrders([])
-      }
-    } catch (error) {
-      console.error('Error fetching orders:', error)
-      setOrders([])
-    } finally {
-      setLoading(false)
+  
+  const handleAssignSubmit = async () => {
+    if (!selectedOrderItem || !assignQuantity || !selectedBatchItem) {
+      alert('Por favor complete todos los campos')
+      return
     }
-  }
 
-  const handleRefresh = async () => {
-    setLoading(true)
-    setSelectedProduct(null) // Deseleccionar el producto
-    try {
-      const response = await getProducts()
-      if (response.success) {
-        setProducts(response.data)
-      }
-      // Cargar todos los pedidos (sin filtro de producto)
-      const ordersResponse = await getOrders({})
-      if (ordersResponse.success) {
-        setOrders(ordersResponse.data)
-      }
-    } catch (error) {
-      console.error('Error refreshing data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDownloadPDF = async () => {
-    if (!selectedProduct) {
-      alert('Por favor selecciona un producto para descargar el PDF')
+    const quantity = parseInt(assignQuantity)
+    if (quantity <= 0) {
+      alert('La cantidad debe ser mayor a 0')
       return
     }
 
     try {
-      setLoading(true)
-
-      // Create PDF content
-      const pdfContent = {
-        product: selectedProduct,
-        orders: orders,
-        generatedAt: new Date().toLocaleString('es-ES')
-      }
-
-      // Call the PDF generation API
-      const response = await fetch('/api/pedido/pdf-generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(pdfContent)
+      const result = await assignBatchToOrder({
+        batchItemId: selectedBatchItem.id,
+        orderItemId: selectedOrderItem.id,
+        quantity: quantity
       })
-
-      if (response.ok) {
-        // Get the PDF blob
-        const blob = await response.blob()
-
-        // Create download link
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `pedidos-${selectedProduct.code}-${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
+      
+      if (result.success) {
+        alert('Salida asignada al pedido exitosamente')
+        setShowAssignModal(false)
+        setSelectedBatchItem(null)
+        setPendingOrders([])
+        setSelectedOrderItem(null)
+        setAssignQuantity('')
+        getSalidas() // Recargar datos
       } else {
-        // Try to get error message from response
-        let errorMessage = 'Error al generar el PDF'
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          // If response is not JSON, use default message
-        }
-        alert(errorMessage)
+        alert('Error al asignar: ' + result.error)
       }
     } catch (error) {
-      console.error('Error downloading PDF:', error)
-      alert('Error al descargar el PDF')
-    } finally {
-      setLoading(false)
+      console.error('Error:', error)
+      alert('Error al asignar salida al pedido')
     }
   }
+
+  // Preparar datos para la tabla
+  const prepareTableData = (): TableRow[] => {
+    const tableRows: TableRow[] = []
+
+    salidas?.batches?.forEach((batch: Batch) => {
+      batch.containers?.forEach((container: Container) => {
+        container.batchItems?.forEach((item: BatchItem) => {
+          const fecha = new Date(batch.createdAt)
+          tableRows.push({
+            folio: `FOL-${batch.id.slice(-8).toUpperCase()}`,
+            area: item.product.area.name,
+            clave: item.product.code,
+            pedido: container.containerCode,
+            lote: batch.batchNumber,
+            fecha: fecha.toLocaleDateString('es-ES'),
+            hora: fecha.toLocaleTimeString('es-ES', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            }),
+            cantidad: item.quantity,
+            id: item.id,
+            productId: item.product.id
+          })
+        })
+      })
+    })
+
+    return tableRows
+  }
+
+  // Aplicar filtros
+  useEffect(() => {
+    const allData = prepareTableData()
+    let filtered = [...allData]
+
+    // Filtro por término de búsqueda general
+    if (searchTerm) {
+      filtered = filtered.filter(row =>
+        Object.values(row).some(value =>
+          value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      )
+    }
+
+    // Filtro por fecha
+    if (filtroFecha) {
+      filtered = filtered.filter(row => row.fecha.includes(filtroFecha))
+    }
+
+    // Filtro por clave
+    if (filtroClave) {
+      filtered = filtered.filter(row =>
+        row.clave.toLowerCase().includes(filtroClave.toLowerCase())
+      )
+    }
+
+    // Filtro por pedido
+    if (filtroPedido) {
+      filtered = filtered.filter(row =>
+        row.pedido.toLowerCase().includes(filtroPedido.toLowerCase())
+      )
+    }
+
+    // Filtro por lote
+    if (filtroLote) {
+      filtered = filtered.filter(row =>
+        row.lote.toLowerCase().includes(filtroLote.toLowerCase())
+      )
+    }
+
+    setFilteredData(filtered)
+  }, [salidas, searchTerm, filtroFecha, filtroClave, filtroPedido, filtroLote])
+
+  const columns = [
+    { key: 'folio', title: 'FOLIO' },
+    { key: 'area', title: 'AREA' },
+    { key: 'clave', title: 'CLAVE' },
+    { key: 'pedido', title: 'PEDIDO' },
+    { key: 'lote', title: 'LOTE' },
+    { key: 'fecha', title: 'FECHA' },
+    { key: 'hora', title: 'HORA' },
+    { key: 'cantidad', title: 'CANTIDAD' },
+    { key: 'otros', title: 'OTROS' }
+  ]
+
+  const tableBody = filteredData.map((row, index) => (
+    <motion.tr
+      key={index}
+      className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'}`}
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      
+    >
+      <td className="px-6 py-4 text-sm text-left">{row.folio}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.area}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.clave}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.pedido}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.lote}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.fecha}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.hora}</td>
+      <td className="px-6 py-4 text-sm text-left">{row.cantidad.toLocaleString()}</td>
+      <td className="px-6 py-4 text-sm text-left">
+        <div className="flex items-center space-x-2">
+          <motion.div
+            whileHover={{ scale: 1.2, rotate: 5 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+          >
+            <FaFile className="text-yellow-500 cursor-pointer" title="Agregar nota" />
+          </motion.div>
+          <motion.div
+            whileHover={{ scale: 1.2, rotate: 5 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+          >
+            <FaPen className="text-blue-500 cursor-pointer" title="Editar" />
+          </motion.div>
+          <motion.div
+            whileHover={{ scale: 1.2, rotate: 5 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+          >
+            <FaTrash className="text-red-500 cursor-pointer" title="Eliminar" />
+          </motion.div>
+        </div>
+      </td>
+    </motion.tr>
+  ))
+
+  // Opciones para los filtros
+  const fechasUnicas = [...new Set(prepareTableData().map(row => row.fecha))]
+  const clavesUnicas = [...new Set(prepareTableData().map(row => row.clave))]
+  const pedidosUnicos = [...new Set(prepareTableData().map(row => row.pedido))]
+  const lotesUnicos = [...new Set(prepareTableData().map(row => row.lote))]
 
   return (
     <motion.div
@@ -206,218 +285,233 @@ export default function ResumenPage() {
     >
       <div className="w-full p-8">
         <motion.div
-          className="flex gap-8"
+          className="bg-white p-8 rounded-lg"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          {/* Columna principal - Productos */}
+          {/* Barra superior con filtros y buscador */}
           <motion.div
-            className="flex-1 bg-white p-8 rounded-lg h-[90vh]"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
+            className="flex justify-between items-center mb-6"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
           >
-            <motion.div
-              className="flex items-center gap-4 mb-4"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.4 }}
-            >
-              <h2 className="text-xl font-bold text-[#2A3182]">Productos</h2>
-              <div className="flex-1" />
-              <motion.button
-                className="flex items-center cursor-pointer gap-2 bg-[#2A3182] hover:bg-[#23285e] text-white px-5 h-10 rounded-[8px] text-base font-semibold shadow-sm"
-                onClick={handleDownloadPDF}
-                disabled={loading || !selectedProduct}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <DownloadIcon />
-                <span>Descargar</span>
-              </motion.button>
+            {/* Filtros dropdown */}
+            <div className="flex space-x-4">
+              <Select
+                options={fechasUnicas.map(fecha => ({ value: fecha, label: fecha }))}
+                placeholder="Fecha"
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFiltroFecha(e.target.value)}
+                value={filtroFecha}
+                className="border-[#2a3182] border-2"
+                label=""
+                name="fecha"
+                id="fecha"
+                required={false}
+                disabled={false}
+                defaultValue=""
+              />
+              <Select
+                options={clavesUnicas.map(clave => ({ value: clave, label: clave }))}
+                placeholder="Clave"
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFiltroClave(e.target.value)}
+                value={filtroClave}
+                className="border-[#2a3182] border-2"
+                label=""
+                name="clave"
+                id="clave"
+                required={false}
+                disabled={false}
+                defaultValue=""
+              />
+              <Select
+                options={pedidosUnicos.map(pedido => ({ value: pedido, label: pedido }))}
+                placeholder="Pedido"
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFiltroPedido(e.target.value)}
+                value={filtroPedido}
+                className="border-[#2a3182] border-2"
+                label=""
+                name="pedido"
+                id="pedido"
+                required={false}
+                disabled={false}
+                defaultValue=""
+              />
+              <Select
+                options={lotesUnicos.map(lote => ({ value: lote, label: lote }))}
+                placeholder="Lote"
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFiltroLote(e.target.value)}
+                value={filtroLote}
+                className="border-[#2a3182] border-2"
+                label=""
+                name="lote"
+                id="lote"
+                required={false}
+                disabled={false}
+                defaultValue=""
+              />
+            </div>
 
-
-              <motion.button
-                className="flex items-center cursor-pointer gap-2 bg-[#2A3182] hover:bg-[#23285e] text-white px-5 h-10 rounded-[8px] text-base font-semibold shadow-sm"
-                onClick={handleRefresh}
-                disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <RefreshIcon />
-                <span>Actualizar</span>
-              </motion.button>
-
-            </motion.div>
-
-            {loading && productsLoading ? (
-              <ProductsTableSkeleton />
-            ) : (
-              <motion.div
-                className="rounded-[8px] overflow-hidden border border-[#E5E7EB]"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.5 }}
-              >
-                <table className="min-w-full text-base">
-                  <thead>
-                    <tr className="bg-[#2A3182] text-white">
-                      <th className="py-2 px-4 text-left font-bold">CÓDIGO</th>
-                      <th className="py-2 px-4 text-left font-bold">NOMBRE</th>
-                      <th className="py-2 px-4 text-left font-bold">ÁREA</th>
-                      <th className="py-2 px-4 text-left font-bold">DESCRIPCIÓN</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.map((product, i) => (
-                      <motion.tr
-                        key={product.id}
-                        className={`cursor-pointer hover:bg-[#E6E5B6] transition-colors ${selectedProduct?.id === product.id ? 'bg-[#E6E5B6]' :
-                          i % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'
-                          }`}
-                        onClick={() => handleProductClick(product)}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.6 + (i * 0.05) }}
-                        whileHover={{ scale: 1.01 }}
-                      >
-                        <td className="py-2 px-4 align-middle font-medium">{product.code}</td>
-                        <td className="py-2 px-4 align-middle">{product.name}</td>
-                        <td className="py-2 px-4 align-middle">{product.area}</td>
-                        <td className="py-2 px-4 align-middle">{product.description || '-'}</td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </motion.div>
-            )}
-
-            {products.length === 0 && !loading && (
-              <motion.div
-                className="text-center py-8 text-gray-500"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
-              >
-                No hay productos disponibles
-              </motion.div>
-            )}
+            {/* Buscador */}
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border-[#2a3182] border-2 rounded-lg outline-none text-black"
+              />
+            </div>
           </motion.div>
 
-          {/* Columna pedidos */}
-          <motion.div
-            className="w-[480px] min-w-[350px] bg-white p-8 rounded-lg h-[90vh]"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-          >
+          {/* Tabla */}
+          {loading ? (
             <motion.div
-              className="mb-4"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
+              className="space-y-3"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              {[...Array(6)].map((_, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex items-center space-x-4 p-4 bg-gray-100 rounded-lg"
+                >
+                  <div className="h-4 bg-gray-300 rounded w-20 animate-pulse"></div>
+                  <div className="h-4 bg-gray-300 rounded w-32 animate-pulse"></div>
+                  <div className="h-4 bg-gray-300 rounded w-24 animate-pulse"></div>
+                  <div className="h-4 bg-gray-300 rounded w-40 animate-pulse"></div>
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : filteredData.length > 0 ? (
+            <motion.div
+              className="rounded-[8px] overflow-hidden border border-[#E5E7EB]"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4, delay: 0.5 }}
             >
-              <h2 className="text-xl font-bold text-[#2A3182] mb-2">
-                Pedidos {selectedProduct ? `- ${selectedProduct.name}` : ''}
-              </h2>
-              {selectedProduct ? (
-                <motion.p
-                  className="text-sm text-gray-600 mb-4"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                >
-                  Mostrando pedidos que contienen el producto: <strong>{selectedProduct.code}</strong>
-                </motion.p>
-              ) : (
-                <motion.p
-                  className="text-sm text-gray-600 mb-4"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                >
-                  Mostrando todos los pedidos
-                </motion.p>
-              )}
+              <table className="min-w-full text-base">
+                <thead>
+                  <tr className="bg-[#2A3182] text-white">
+                    {columns.map((column, index) => (
+                      <th key={index} className="py-2 px-4 text-left font-bold">
+                        {column.title}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableBody}
+                </tbody>
+              </table>
             </motion.div>
-
-            {loading && ordersLoading ? (
-              <OrdersTableSkeleton />
-            ) : (
-              <motion.div
-                className="rounded-[8px] overflow-hidden border border-[#E5E7EB]"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.7 }}
-              >
-                <table className="min-w-full text-base">
-                  <thead>
-                    <tr className="bg-[#8B8B8B] text-white">
-                      <th className="py-2 px-4 text-left font-bold">NÚMERO</th>
-                      <th className="py-2 px-4 text-left font-bold">ESTADO</th>
-                      <th className="py-2 px-4 text-left font-bold">CANTIDAD</th>
-                      <th className="py-2 px-4 text-left font-bold">FECHA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((order, i) => {
-                      // Find the specific item for this product if one is selected
-                      const productItem = selectedProduct
-                        ? order.orderItems.find(item => item.productId === selectedProduct.id)
-                        : null
-                      return (
-                        <motion.tr
-                          key={order.id}
-                          className={i % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.8 + (i * 0.05) }}
-                          whileHover={{ scale: 1.01 }}
-                        >
-                          <td className="py-2 px-4 align-middle font-medium">{order.orderNumber}</td>
-                          <td className="py-2 px-4 align-middle">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                              order.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                                order.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                  'bg-red-100 text-red-800'
-                              }`}>
-                              {order.status === 'PENDING' ? 'PENDIENTE' :
-                                order.status === 'IN_PROGRESS' ? 'EN PROCESO' :
-                                  order.status === 'COMPLETED' ? 'COMPLETADO' :
-                                    'CANCELADO'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-4 align-middle">
-                            {selectedProduct
-                              ? (productItem?.quantity || 0)
-                              : order.orderItems.reduce((total, item) => total + item.quantity, 0)
-                            }
-                          </td>
-                          <td className="py-2 px-4 align-middle text-sm">
-                            {new Date(order.createdAt).toLocaleDateString('es-ES')}
-                          </td>
-                        </motion.tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </motion.div>
-            )}
-
-            {orders.length === 0 && !loading && (
-              <motion.div
-                className="text-center py-8 text-gray-500"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.9 }}
-              >
-                No hay pedidos para este producto
-              </motion.div>
-            )}
-          </motion.div>
+          ) : (
+            <motion.div
+              className="text-center py-8 text-gray-500 bg-white rounded-lg border"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+            >
+              {salidas?.batches && salidas.batches.length > 0
+                ? 'No se encontraron resultados con los filtros aplicados'
+                : 'No hay datos de salidas disponibles'
+              }
+            </motion.div>
+          )}
         </motion.div>
       </div>
+
+      {/* Modal de Asignación */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-[#2A3182]">
+              Asignar Salida a Pedido
+            </h2>
+            
+            {selectedBatchItem && (
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <h3 className="font-semibold mb-2">Información de la Salida:</h3>
+                <p><strong>Producto:</strong> {selectedBatchItem.product.name}</p>
+                <p><strong>Código:</strong> {selectedBatchItem.product.code}</p>
+                <p><strong>Cantidad Disponible:</strong> {selectedBatchItem.quantity.toLocaleString()}</p>
+                <p><strong>Lote:</strong> {selectedBatchItem.container.batch.batchNumber}</p>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Seleccionar Pedido:</label>
+              <select
+                className="w-full p-2 border border-gray-300 rounded-lg"
+                onChange={(e) => {
+                  const orderItem = pendingOrders
+                    .flatMap(order => order.orderItems)
+                    .find(item => item.id === e.target.value)
+                  setSelectedOrderItem(orderItem)
+                }}
+                value={selectedOrderItem?.id || ''}
+              >
+                <option value="">Seleccione un pedido...</option>
+                {pendingOrders.map((order) => (
+                  <optgroup key={order.id} label={`Pedido: ${order.orderNumber} (${order.status})`}>
+                    {order.orderItems.map((item: any) => {
+                      const pendingQty = item.quantity - (item.completedQuantity || 0)
+                      return (
+                        <option key={item.id} value={item.id}>
+                          {item.product.name} - Pendiente: {pendingQty.toLocaleString()} / Total: {item.quantity.toLocaleString()}
+                        </option>
+                      )
+                    })}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Cantidad a Asignar:</label>
+              <input
+                type="number"
+                className="w-full p-2 border border-gray-300 rounded-lg"
+                value={assignQuantity}
+                onChange={(e) => setAssignQuantity(e.target.value)}
+                placeholder="Ingrese la cantidad"
+                min="1"
+                max={selectedBatchItem?.quantity || 0}
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowAssignModal(false)
+                  setSelectedBatchItem(null)
+                  setPendingOrders([])
+                  setSelectedOrderItem(null)
+                  setAssignQuantity('')
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAssignSubmit}
+                disabled={assignLoading || !selectedOrderItem || !assignQuantity}
+                className="px-4 py-2 bg-[#2A3182] text-white rounded-lg hover:bg-[#1a1f5a] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {assignLoading ? 'Asignando...' : 'Asignar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }
+
+export default page

@@ -48,18 +48,7 @@ export function Combobox({ items, value, onChange, placeholder = "Select an opti
             </PopoverTrigger>
             <PopoverContent className="w-full p-0 shadow-lg border border-gray-200 rounded-lg">
                 <Command className="rounded-lg">
-                    <div className="flex gap-2 items-center p-2 border-b">
-                        <CommandInput placeholder="Buscar..." className="h-9 text-sm" />
-                        {onCreateNew && (
-                            <button 
-                                onClick={onCreateNew}
-                                className="cursor-pointer bg-[#1f2160] text-white p-2 rounded-md hover:bg-[#1f2160]/80 transition-all duration-200 flex items-center gap-1"
-                            >
-                                <FaPlus className="w-3 h-3" />
-                                <span className="text-sm">Nuevo</span>
-                            </button>
-                        )}
-                    </div>
+                    <CommandInput placeholder="Buscar..." className="h-9 text-sm" />
                     <CommandList>
                         <CommandEmpty>
                             <div className="flex flex-col items-center gap-3 p-6 text-center">
@@ -82,10 +71,13 @@ export function Combobox({ items, value, onChange, placeholder = "Select an opti
                             {items.map((item) => (
                                 <CommandItem
                                     key={item.value}
-                                    value={item.value}
+                                    value={item.label}
                                     onSelect={(currentValue) => {
-                                        onChange(currentValue === value ? "" : currentValue)
-                                        setOpen(false)
+                                        const selectedItem = items.find(item => item.label === currentValue);
+                                        if (selectedItem) {
+                                            onChange(selectedItem.value);
+                                        }
+                                        setOpen(false);
                                     }}
                                     className="px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 transition-colors duration-150"
                                 >

@@ -49,8 +49,8 @@ model Product {
   updatedAt     DateTime  @updatedAt
   
   // Relations
-  areaId        String
-  area          Area      @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  areaId        String?
+  area          Area?     @relation(fields: [areaId], references: [id], onDelete: Cascade)
   orderItems    OrderItem[]
   batchItems    BatchItem[]
   logs          Log[]
@@ -80,6 +80,7 @@ model OrderItem {
   quantity      Int
   unitPrice     Decimal   @db.Decimal(10, 2)
   totalPrice    Decimal   @db.Decimal(10, 2)
+  completedQuantity Int   @default(0) // Cantidad completada del pedido
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
@@ -88,6 +89,7 @@ model OrderItem {
   order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId     String
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchItems    BatchItem[] // Relación con las salidas que llenan este item
 }
 
 model Batch {
@@ -101,7 +103,6 @@ model Batch {
   
   // Relations
   containers    Container[]
-  batchItems    BatchItem[]
   logs          Log[]
 }
 
@@ -117,6 +118,7 @@ model Container {
   // Relations
   batchId       String
   batch         Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchItems    BatchItem[]
 }
 
 model BatchItem {
@@ -126,10 +128,12 @@ model BatchItem {
   updatedAt     DateTime  @updatedAt
   
   // Relations
-  batchId       String
-  batch         Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  containerId   String
+  container     Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
   productId     String
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItemId   String?   // Relación opcional con el item del pedido que se está llenando
+  orderItem     OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
 }
 
 model Note {

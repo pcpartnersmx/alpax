@@ -15,7 +15,32 @@ export interface CreateBatchRequest {
 
 export interface CreateBatchResponse {
     success: boolean;
-    data?: any;
+    data?: {
+        id: string;
+        batchNumber: string;
+        name: string;
+        description?: string;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+        containers: any[];
+        batchItems: any[];
+        assignments?: Array<{
+            batchItemId: string;
+            productName: string;
+            totalQuantity: number;
+            assignedQuantity: number;
+            remainingQuantity: number;
+            assignments: Array<{
+                orderNumber: string;
+                orderItemId: string;
+                assignedQuantity: number;
+                pendingBefore: number;
+                pendingAfter: number;
+            }>;
+            error?: string;
+        }>;
+    };
     error?: string;
     message?: string;
 }

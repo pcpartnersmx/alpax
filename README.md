@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Alpax - Sistema de Gestión de Pedidos
 
-## Getting Started
+Este es un proyecto [Next.js](https://nextjs.org) que incluye funcionalidades de análisis de PDF usando OpenAI.
 
-First, run the development server:
+## Características
+
+- **Análisis de PDF**: Extrae texto de archivos PDF y los analiza usando OpenAI GPT-4
+- **Gestión de Pedidos**: Sistema completo de gestión de pedidos y productos
+- **Autenticación**: Sistema de autenticación con NextAuth
+- **Base de Datos**: Integración con Prisma y PostgreSQL
+
+## Configuración del Entorno
+
+### Variables de Entorno Requeridas
+
+Crea un archivo `.env.local` en la raíz del proyecto con las siguientes variables:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Base de datos
+DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/alpax"
+
+# NextAuth
+NEXTAUTH_SECRET="tu-secret-key-aqui"
+NEXTAUTH_URL="http://localhost:3000"
+
+# OpenAI (requerido para análisis de PDF)
+OPENAI_API_KEY="tu-openai-api-key-aqui"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Obtener API Key de OpenAI
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Ve a [OpenAI Platform](https://platform.openai.com/)
+2. Crea una cuenta o inicia sesión
+3. Ve a "API Keys" en el menú lateral
+4. Crea una nueva API key
+5. Copia la key y agrégala a tu archivo `.env.local`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Instalación
 
-## Learn More
+```bash
+# Instalar dependencias
+npm install
 
-To learn more about Next.js, take a look at the following resources:
+# Configurar la base de datos
+npm run db:push
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Ejecutar el servidor de desarrollo
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Uso
 
-## Deploy on Vercel
+### Análisis de PDF
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Ve a `http://localhost:3000/test-pdf`
+2. Sube un archivo PDF
+3. El sistema extraerá el texto y lo analizará con OpenAI
+4. Verás los resultados estructurados (número de orden y productos)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### API Endpoints
+
+- `POST /api/pedido/pdf` - Analiza un archivo PDF
+- `GET /api/pedido/pdf-generate` - Endpoint de prueba
+
+## Estructura del Proyecto
+
+```
+src/
+├── app/
+│   ├── api/pedido/pdf/          # API para análisis de PDF
+│   ├── components/              # Componentes React
+│   └── test-pdf/               # Página de prueba
+├── lib/
+│   ├── auth.ts                 # Configuración de autenticación
+│   └── db.ts                   # Configuración de base de datos
+└── types/                      # Tipos TypeScript
+```
+
+## Tecnologías Utilizadas
+
+- **Next.js 15** - Framework de React
+- **TypeScript** - Tipado estático
+- **Prisma** - ORM para base de datos
+- **NextAuth** - Autenticación
+- **OpenAI API** - Análisis de texto con IA
+- **Tailwind CSS** - Estilos
+- **pdf-parse** - Extracción de texto de PDF
+
+## Desarrollo
+
+```bash
+# Ejecutar en modo desarrollo
+npm run dev
+
+# Construir para producción
+npm run build
+
+# Ejecutar en producción
+npm start
+
+# Linting
+npm run lint
+```

@@ -122,21 +122,17 @@ export default function PedidosPage() {
     { key: "producto", title: "PRODUCTO" },
     { key: "departamento", title: "DEPARTAMENTO" },
     { key: "cantidad", title: "Cant. PEDIDO" },
-    { key: "fabricacion", title: "FABRICACIÓN" },
+    { key: "completado", title: "COMPLETADO" },
     { key: "restante", title: "RESTANTE" },
   ];
 
-  // Simulación de datos de fabricación para la demo visual
-  function getFabricacion(productId: string) {
-    // Puedes cambiar esta lógica por datos reales si los tienes
-    // const random = Math.floor(Math.random() * 10000);
-    // return random;
-
-    return 0;
+  // Obtener cantidad completada del item del pedido
+  function getCompletado(orderItem: any) {
+    return orderItem.completedQuantity || 0;
   }
 
-  function getRestante(cantidad: number, fabricacion: number) {
-    return fabricacion - cantidad;
+  function getRestante(cantidad: number, completado: number) {
+    return cantidad - completado;
   }
 
   return (
@@ -203,10 +199,11 @@ export default function PedidosPage() {
                 </thead>
                 <tbody>
                   {selectedOrder.orderItems.map((item, idx) => {
-                    const fabricacion = getFabricacion(item.productId);
+                    const completado = getCompletado(item);
+                    const restante = getRestante(item.quantity, completado);
                     let restanteColor = "bg-green-500";
-                    if (item.quantity - fabricacion > 0) restanteColor = "bg-yellow-500";
-                    if (item.quantity - fabricacion < 0) restanteColor = "bg-red-500";
+                    if (restante > 0) restanteColor = "bg-yellow-500";
+                    if (restante < 0) restanteColor = "bg-red-500";
                     return (
                       <motion.tr
                         key={item.id}
@@ -223,8 +220,8 @@ export default function PedidosPage() {
                         <td className="p-2">{item.product.name}</td>
                         <td className="p-2">{item.product.area?.name || "-"}</td>
                         <td className="p-2">{item.quantity.toLocaleString()}</td>
-                        <td className="p-2">{fabricacion.toLocaleString()}</td>
-                        <td className={`p-2 text-white text-center font-bold rounded ${restanteColor}`}>{item.quantity - fabricacion > 0 ? item.quantity - fabricacion : 0}</td>
+                        <td className="p-2">{completado.toLocaleString()}</td>
+                        <td className={`p-2 text-white text-center font-bold rounded ${restanteColor}`}>{restante > 0 ? restante : 0}</td>
                       </motion.tr>
                     );
                   })}

@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
             id: product.id,
             name: product.name,
             code: product.code,
-            area: product.area.name, // Mantener el nombre del área para compatibilidad
+            area: product?.area?.name, // Mantener el nombre del área para compatibilidad
             areaId: product.areaId,
             description: product.description,
             createdAt: product.createdAt,

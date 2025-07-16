@@ -137,7 +137,7 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
         console.log(`Resultado de asignación para ${batchItem.product.name}:`, result);
         return result;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error en asignación automática:', error);
         console.error('Detalles del error:', {
             message: error.message,

@@ -19,20 +19,23 @@ export async function GET(
 
         const { id } = await params;
 
-        // Obtener el lote con sus items y contenedores
+        // Obtener el lote con sus contenedores y sus items
         const batch = await prisma.batch.findUnique({
             where: { id },
             include: {
-                batchItems: {
+                containers: {
                     include: {
-                        product: {
+                        batchItems: {
                             include: {
-                                area: true
+                                product: {
+                                    include: {
+                                        area: true
+                                    }
+                                }
                             }
                         }
                     }
-                },
-                containers: true
+                }
             }
         });
 

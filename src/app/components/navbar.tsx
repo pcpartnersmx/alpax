@@ -13,6 +13,7 @@ import { Combobox } from './ui/combobox'
 import { FaFile, FaFileUpload, FaPlus, FaSpinner, FaTrash, FaTimes } from 'react-icons/fa'
 import { useOrders } from '@/hooks/useOrders'
 import { useBatches } from '@/hooks/useBatches'
+import { useUpdate } from '@/contexts/UpdateContext'
 import AssignmentSummaryModal from './AssignmentSummaryModal'
 
 
@@ -21,6 +22,7 @@ const Navbar = () => {
     const { data: session, status } = useSession();
     const { createOrder, loading: orderLoading } = useOrders();
     const { createBatch, loading: batchLoading } = useBatches();
+    const { triggerUpdate } = useUpdate();
     const [showPedidoModal, setShowPedidoModal] = useState(false);
     const [showLoteModal, setShowLoteModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,6 +45,7 @@ const Navbar = () => {
         contenedores: string[];
         codigo: string;
         id: string;
+        productName: string;
     }[]>([]);
     const [errors, setErrors] = useState({
         producto: '',
@@ -93,52 +96,7 @@ const Navbar = () => {
         fetchProductos();
     }, []);
 
-    // Auto-add product when product is selected
-    useEffect(() => {
-        if (formData.producto) {
-            // Check if product already exists in the list
-            const existingProduct = loteItems.find(item => item.id === formData.producto);
-
-            if (!existingProduct) {
-                // Add new product immediately when selected (empty)
-                const productoObj = productos.find(p => p.id === formData.producto);
-                if (productoObj) {
-                    setLoteItems(prev => [
-                        ...prev,
-                        {
-                            producto: productoObj.name,
-                            lote: '',
-                            cantidad: '',
-                            contenedores: [],
-                            codigo: productoObj.code,
-                            id: formData.producto
-                        }
-                    ]);
-                }
-            }
-        }
-    }, [formData.producto]); // Only trigger when product changes
-
-    // Update product in list when other fields change
-    useEffect(() => {
-        if (formData.producto) {
-            const existingProductIndex = loteItems.findIndex(item => item.id === formData.producto);
-
-            if (existingProductIndex !== -1) {
-                // Update existing product
-                setLoteItems(prev => prev.map((item, index) =>
-                    index === existingProductIndex
-                        ? {
-                            ...item,
-                            lote: formData.lote,
-                            cantidad: formData.cantidad,
-                            contenedores: [...formData.contenedores]
-                        }
-                        : item
-                ));
-            }
-        }
-    }, [formData.lote, formData.cantidad, formData.contenedores, formData.producto]);
+    // Remove auto-add effect - we'll handle adding products manually
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         if (!e || !e.target) return;
@@ -192,7 +150,7 @@ const Navbar = () => {
             errors.producto = 'Seleccione un producto';
             valid = false;
         }
-        if (!formData.lote) {
+        if (!formData.lote || formData.lote.trim() === '') {
             errors.lote = 'El lote es requerido';
             valid = false;
         }
@@ -205,15 +163,10 @@ const Navbar = () => {
             valid = false;
         }
 
+        setErrors(errors);
         if (!valid) return;
 
         const productoObj = productos.find(p => p.id === formData.producto);
-
-        // Verificar si el producto ya existe en el lote
-        const productExists = loteItems.some(item => item.id === formData.producto);
-        if (productExists) {
-            return; // No agregar si ya existe
-        }
 
         setLoteItems(prev => [
             ...prev,
@@ -223,13 +176,24 @@ const Navbar = () => {
                 cantidad: formData.cantidad,
                 contenedores: [...formData.contenedores],
                 codigo: productoObj ? productoObj.code : '',
-                id: formData.producto
+                id: formData.producto,
+                productName: productoObj ? productoObj.name : ''
             }
         ]);
 
-        // Limpiar el formulario
-        setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
-        setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
+        // Limpiar lote, cantidad y contenedores, mantener producto
+        setFormData(prev => ({ 
+            ...prev, 
+            lote: '', 
+            cantidad: '',
+            contenedores: []
+        }));
+        setErrors(prev => ({ 
+            ...prev, 
+            lote: '', 
+            cantidad: '',
+            contenedores: ''
+        }));
     };
 
     const handleRemoveLoteItem = (index: number) => {
@@ -244,7 +208,8 @@ const Navbar = () => {
             cantidad: item.cantidad,
             contenedores: [...item.contenedores]
         });
-        // No remover el item, solo cargar para editar
+        // Remove the item being edited
+        setLoteItems(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async () => {
@@ -254,17 +219,26 @@ const Navbar = () => {
             return;
         }
 
+        // Validar que todos los productos tengan su lote
+        const productosSinLote = loteItems.filter(item => !item.lote || item.lote.trim() === '');
+        if (productosSinLote.length > 0) {
+            toast.error('Todos los productos deben tener un número de lote');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // Preparar los datos para enviar al API
             const batchData = {
-                batchNumber: batchNumber.trim() || `LOTE-${Date.now()}`, // Usar número personalizado o generar automáticamente
-                name: `Lote ${batchNumber.trim() || new Date().toLocaleDateString()}`,
-                description: `Lote creado el ${new Date().toLocaleString()}`,
+                name: `Salida - ${new Date().toLocaleString()}`,
+                description: `Salida creada el ${new Date().toLocaleString()}`,
                 items: loteItems.map(item => ({
                     productId: item.id,
+                    productCode: item.codigo,
+                    productName: item.productName,
+                    lotNumber: item.lote,
                     quantity: parseInt(item.cantidad),
-                    containers: item.contenedores // Cada item tiene sus propios contenedores
+                    containers: item.contenedores
                 }))
             };
 
@@ -278,8 +252,11 @@ const Navbar = () => {
                 setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
                 setBatchNumber('');
 
+                // Disparar actualización de todas las páginas
+                triggerUpdate('all');
+
                 // Mostrar mensaje de éxito con información de asignaciones
-                let successMessage = 'Lote creado exitosamente';
+                let successMessage = `${result.data?.totalBatches || 1} lote(s) creado(s) exitosamente`;
 
                 if (result.data?.assignments && result.data.assignments.length > 0) {
                     const totalAssigned = result.data.assignments.reduce((sum: number, assignment: any) =>
@@ -292,20 +269,70 @@ const Navbar = () => {
                         // Mostrar modal con detalles de asignaciones
                         setAssignmentData({
                             assignments: result.data.assignments,
-                            batchNumber: result.data.batchNumber
+                            batchNumber: result.data.batchNumber || 'N/A'
                         });
                         setShowAssignmentModal(true);
                     }
                 }
 
                 toast.success(successMessage);
+
+                // Generar y descargar PDF
+                if (result.data && result.data.batchNumber) {
+                    try {
+                        const batchNumber = result.data.batchNumber;
+                        const pdfData = {
+                            batchData: {
+                                batchNumber: batchNumber,
+                                name: batchData.name,
+                                description: batchData.description
+                            },
+                            items: loteItems.map(item => ({
+                                productName: item.productName,
+                                productCode: item.codigo,
+                                lote: item.lote,
+                                quantity: parseInt(item.cantidad),
+                                containers: item.contenedores,
+                                orderNumber: '3948' // Valor por defecto, se puede modificar si es necesario
+                            }))
+                        };
+
+                        const pdfResponse = await fetch('/api/lotes/pdf-generate', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(pdfData)
+                        });
+
+                        if (pdfResponse.ok) {
+                            const pdfBlob = await pdfResponse.blob();
+                            const url = window.URL.createObjectURL(pdfBlob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `salida-producto-${batchNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                            
+                            toast.success('PDF descargado exitosamente');
+                        } else {
+                            console.error('Error generando PDF');
+                            toast.error('Error al generar el PDF');
+                        }
+                    } catch (pdfError) {
+                        console.error('Error descargando PDF:', pdfError);
+                        toast.error('Error al descargar el PDF');
+                    }
+                }
             } else {
                 // Mostrar error
-                toast.error(`Error al crear el lote: ${result.error}`);
+                toast.error(`Error al crear los lotes: ${result.error}`);
             }
         } catch (error) {
-            console.error('Error al crear el lote:', error);
-            toast.error('Error al crear el lote. Por favor, inténtalo de nuevo.');
+            console.error('Error al crear los lotes:', error);
+            toast.error('Error al crear los lotes. Por favor, inténtalo de nuevo.');
         } finally {
             setIsSubmitting(false);
         }
@@ -342,7 +369,7 @@ const Navbar = () => {
                 producto: productoObj ? productoObj.name : '',
                 cantidad: Number(pedidoForm.cantidad).toLocaleString(),
                 codigo: productoObj ? productoObj.code : '',
-                id: pedidoForm.producto
+                id: productoObj ? productoObj.id : ''
             }
         ]);
         // Solo limpiar producto y cantidad, mantener el número de pedido
@@ -395,6 +422,9 @@ const Navbar = () => {
                 setPdfString(null);
                 setPdfAnalysis(null);
 
+                // Disparar actualización de todas las páginas
+                triggerUpdate('all');
+
                 // Mostrar mensaje de éxito
                 toast.success('Pedido creado exitosamente');
             } else {
@@ -437,30 +467,30 @@ const Navbar = () => {
             const formData = new FormData();
             formData.append('file', pdfFile);
 
-                            try {
-                    setPdfStringLoading(true);
-                    const response = await fetch('/api/pedido/pdf', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                        setPdfString(data.fullText);
-                        setPdfAnalysis(data.analysis);
-                    } else {
-                        setPdfString(null);
-                        setPdfAnalysis(null);
-                        console.error('Error procesando archivo:', data.error);
-                        toast.error('Error procesando el PDF');
-                    }
-                } catch (error) {
+            try {
+                setPdfStringLoading(true);
+                const response = await fetch('/api/pedido/pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setPdfString(data.fullText);
+                    setPdfAnalysis(data.analysis);
+                } else {
                     setPdfString(null);
                     setPdfAnalysis(null);
-                    console.error('Error enviando archivo:', error);
-                    toast.error('Error enviando el archivo');
-                } finally {
-                    setPdfStringLoading(false);
+                    console.error('Error procesando archivo:', data.error);
+                    toast.error('Error procesando el PDF');
                 }
+            } catch (error) {
+                setPdfString(null);
+                setPdfAnalysis(null);
+                console.error('Error enviando archivo:', error);
+                toast.error('Error enviando el archivo');
+            } finally {
+                setPdfStringLoading(false);
+            }
         } else {
             alert('Por favor, arrastra solo archivos PDF');
         }
@@ -484,7 +514,7 @@ const Navbar = () => {
         if (pdfAnalysis && pdfAnalysis.orden && pdfAnalysis.productos) {
             // Set order number
             setPedidoForm(prev => ({ ...prev, numeroPedido: pdfAnalysis.orden.toString() }));
-            
+
             // Add products to the list
             const newPedidoItems = pdfAnalysis.productos.map((producto: any) => {
                 const productoObj = productos.find(p => p.code === producto.codigo);
@@ -495,12 +525,12 @@ const Navbar = () => {
                     id: productoObj ? productoObj.id : ''
                 };
             }).filter((item: any) => item.id); // Only add products that exist in our database
-            
+
             setPedidoItems(newPedidoItems);
-            
+
             // Clear the PDF string to show the form
             setPdfString(null);
-            
+
             // Show success message
             toast.success(`PDF analizado: Orden ${pdfAnalysis.orden} con ${pdfAnalysis.productos.length} productos`);
         }
@@ -810,14 +840,13 @@ const Navbar = () => {
 
                                                     <div className='flex flex-col gap-2'>
                                                         <input type="file" name="archivoPDF" id="archivoPDF" accept="application/pdf" className="hidden" onChange={handleFileSelect} />
-                                                        <button 
-                                                            className={`font-semibold px-4 py-2 rounded cursor-pointer transition flex items-center gap-2 ${
-                                                                pdfAnalysis 
-                                                                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                                                                    : archivoPDF 
+                                                        <button
+                                                            className={`font-semibold px-4 py-2 rounded cursor-pointer transition flex items-center gap-2 ${pdfAnalysis
+                                                                ? 'bg-green-600 text-white hover:bg-green-700'
+                                                                : archivoPDF
                                                                     ? 'bg-yellow-600 text-white hover:bg-yellow-700'
                                                                     : 'bg-red-600 text-white hover:bg-red-700'
-                                                            }`} 
+                                                                }`}
                                                             onClick={() => document.getElementById('archivoPDF')?.click()}
                                                         >
                                                             <FaFileUpload className="text-white" />
@@ -845,9 +874,9 @@ const Navbar = () => {
             {/* Modal para Nuevo Lote */}
             {showLoteModal && (
                 <Modal
-                    title="Nueva Salida"
+                    title="Nueva Salida - Crear Lotes"
                     classNameTitle='text-start text-3xl'
-                    message=""
+                    message="Agrega los productos que conformarán los lotes de esta salida. Cada producto será un lote independiente."
                     onClose={() => {
                         setShowLoteModal(false);
                         setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
@@ -855,111 +884,103 @@ const Navbar = () => {
                         setLoteItems([]);
                         setBatchNumber('');
                     }}
-                    size="md"
+                    size="xl"
                     body={
                         <div className="w-full p-2">
-                            {/* Número de lote */}
-                            {/* <div className="mb-4">
-                                <Input
-                                    label="Número de Lote"
-                                    type="text"
-                                    placeholder="Número de lote (opcional)"
-                                    defaultValue={batchNumber}
-                                    onChange={(value: string | number) => setBatchNumber(String(value))}
-                                    className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-[#2A3182] focus:ring-2 focus:ring-[#2A3182]/20 transition w-full text-lg"
-                                />
-                            </div> */}
-                            {/* Formulario para agregar productos */}
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700 mb-2 block">Nombre de Producto</label>
-                                    <Combobox
-                                        items={loadingProductos ? [{ value: '', label: 'Cargando productos...' }] : productos.map(p => ({
-                                            value: p.id,
-                                            label: `${p.code} - ${p.name}`
-                                        }))}
-                                        value={formData.producto}
-                                        onChange={(value) => {
-                                            // Check if this product already exists
-                                            const existingProduct = loteItems.find(item => item.id === value);
 
-                                            if (existingProduct) {
-                                                // Load existing product data
-                                                setFormData({
-                                                    producto: value,
-                                                    lote: existingProduct.lote,
-                                                    cantidad: existingProduct.cantidad,
-                                                    contenedores: [...existingProduct.contenedores]
-                                                });
-                                            } else {
-                                                // Clear form for new product
-                                                setFormData({
-                                                    producto: value,
-                                                    lote: '',
-                                                    cantidad: '',
-                                                    contenedores: []
-                                                });
-                                            }
-                                            setErrors(prev => ({ ...prev, producto: '' }));
-                                        }}
-                                        placeholder="Selecciona un producto"
-                                    />
-                                    {errors.producto && (
-                                        <p className="text-red-500 text-xs mt-1">{errors.producto}</p>
-                                    )}
+                            {/* Formulario para agregar productos */}
+                            <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-6">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Agregar Lote</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className='text-start'>
+                                        <label className="text-sm font-medium text-gray-700 mb-2 block">Producto</label>
+                                        <Combobox
+                                            items={loadingProductos ? [{ value: '', label: 'Cargando productos...' }] : productos.map(p => ({
+                                                value: p.id,
+                                                label: `${p.code} - ${p.name}`
+                                            }))}
+                                            value={formData.producto}
+                                            onChange={(value) => {
+                                                setFormData(prev => ({ ...prev, producto: value }));
+                                                setErrors(prev => ({ ...prev, producto: '' }));
+                                            }}
+                                            placeholder="Selecciona un producto"
+                                        />
+                                        {errors.producto && (
+                                            <p className="text-red-500 text-xs mt-1">{errors.producto}</p>
+                                        )}
+                                    </div>
+                                    <div className='text-start'>
+                                        <label className="text-sm font-medium text-gray-700 mb-2 block" htmlFor="lote">
+                                            Número de Lote <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="lote"
+                                            id="lote"
+                                            placeholder="Ej: L001-2024, BATCH-001"
+                                            value={formData.lote}
+                                            onChange={e => {
+                                                setFormData(prev => ({ ...prev, lote: e.target.value }));
+                                                setErrors(prev => ({ ...prev, lote: '' }));
+                                            }}
+                                            className={`w-full px-3 bg-white py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2A3182]/20 transition text-lg ${errors.lote ? 'border-red-500' : 'border-gray-200'}`}
+                                            disabled={isSubmitting}
+                                        />
+                                        {errors.lote && (
+                                            <p className="text-red-500 text-xs mt-1">{errors.lote}</p>
+                                        )}
+                                    </div>
+                                    <div className='text-start'>
+                                        <label className="text-sm font-medium text-gray-700 mb-2 block" htmlFor="cantidad">Cantidad</label>
+                                        <input
+                                            type="number"
+                                            name="cantidad"
+                                            id="cantidad"
+                                            placeholder="Cantidad"
+                                            value={formData.cantidad}
+                                            onChange={e => {
+                                                setFormData(prev => ({ ...prev, cantidad: e.target.value }));
+                                                setErrors(prev => ({ ...prev, cantidad: '' }));
+                                            }}
+                                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2A3182]/20 transition text-lg ${errors.cantidad ? 'border-red-500' : 'border-gray-200'}`}
+                                            disabled={isSubmitting}
+                                            min="1"
+                                        />
+                                        {errors.cantidad && (
+                                            <p className="text-red-500 text-xs mt-1">{errors.cantidad}</p>
+                                        )}
+                                    </div>
+                                    <div className='text-start'>
+                                        <label className="text-sm font-medium text-gray-700 mb-2 block">Contenedores</label>
+                                        <TagsInput
+                                            placeholder="Escribe código de contenedor y presiona Enter"
+                                            value={formData.contenedores}
+                                            onChange={(tags: string[]) => {
+                                                setFormData(prev => ({ ...prev, contenedores: tags }));
+                                                setErrors(prev => ({ ...prev, contenedores: '' }));
+                                            }}
+                                            disabled={isSubmitting}
+                                            maxTags={10}
+                                        />
+                                        {errors.contenedores && (
+                                            <p className="text-red-500 text-xs mt-1">{errors.contenedores}</p>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className='text-start'>
-                                    <Input
-                                        label="Lote"
-                                        type="text"
-                                        placeholder="Escribe el lote"
-                                        name="lote"
-                                        id="lote"
-                                        onChange={(value: string | number) => {
-                                            setFormData(prev => ({ ...prev, lote: String(value) }));
-                                            setErrors(prev => ({ ...prev, lote: '' }));
-                                        }}
-                                        className={errors.lote ? 'border-red-500' : ''}
-                                        disabled={isSubmitting}
-                                    />
-                                    {errors.lote && (
-                                        <p className="text-red-500 text-xs mt-1">{errors.lote}</p>
-                                    )}
-                                </div>
-                                <div className='text-start'>
-                                    <Input
-                                        label="Cantidad"
-                                        type="number"
-                                        placeholder="Escriba cantidad"
-                                        name="cantidad"
-                                        id="cantidad"
-                                        onChange={(value: string | number) => {
-                                            setFormData(prev => ({ ...prev, cantidad: String(value) }));
-                                            setErrors(prev => ({ ...prev, cantidad: '' }));
-                                        }}
-                                        className={errors.cantidad ? 'border-red-500' : ''}
-                                        disabled={isSubmitting}
-                                    />
-                                    {errors.cantidad && (
-                                        <p className="text-red-500 text-xs mt-1">{errors.cantidad}</p>
-                                    )}
-                                </div>
-                                <div className='text-start'>
-                                    <TagsInput
-                                        label="Contenedores"
-                                        placeholder="Agregar contenedor"
-                                        value={formData.contenedores}
-                                        onChange={(tags: string[]) => {
-                                            setFormData(prev => ({ ...prev, contenedores: tags }));
-                                            setErrors(prev => ({ ...prev, contenedores: '' }));
-                                        }}
-                                        disabled={isSubmitting}
-                                        maxTags={10}
-                                    />
-                                    {errors.contenedores && (
-                                        <p className="text-red-500 text-xs mt-1">{errors.contenedores}</p>
-                                    )}
-                                </div>
+                            </div>
+
+                            {/* Botón para agregar producto */}
+                            <div className="flex justify-end mb-6">
+                                <button
+                                    type="button"
+                                    onClick={handleAddLoteItem}
+                                    className="bg-[#2A3182] text-white font-semibold px-6 py-3 rounded-lg hover:bg-[#232966] transition flex items-center gap-2 disabled:opacity-50 shadow-md"
+                                    disabled={isSubmitting || !formData.producto}
+                                >
+                                    <FaPlus size={16} />
+                                    Agregar Lote
+                                </button>
                             </div>
 
 
@@ -980,64 +1001,63 @@ const Navbar = () => {
                                 </div>
                             )} */}
 
-                            {/* Tabla de productos agregados */}
+                            {/* Tabla de lotes agregados */}
                             {loteItems.length > 0 && (
-                                <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
-                                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                                        <h3 className="text-sm font-semibold text-gray-700">Productos en el Lote</h3>
+                                <div className="mb-6 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+                                        <h3 className="text-lg font-semibold text-gray-800">Lotes en la Salida ({loteItems.length})</h3>
                                     </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-gray-100">
+                                    <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50">
                                                 <tr>
-                                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Código</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Producto</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Lote</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Cantidad</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-gray-700">Contenedores</th>
-                                                    <th className="px-3 py-2 text-center font-semibold text-gray-700">Acciones</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lote</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contenedores</th>
+                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
+                                            <tbody className="bg-white divide-y divide-gray-200">
                                                 {loteItems.map((item, idx) => (
                                                     <tr
                                                         key={idx}
-                                                        className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} cursor-pointer hover:bg-blue-50 transition-colors ${formData.producto === item.id ? "!bg-blue-100 border-l-4 border-blue-500" : ""
-                                                            }`}
+                                                        className="hover:bg-gray-50 transition-colors cursor-pointer"
                                                         onClick={() => handleEditLoteItem(idx)}
-                                                        title="Haz clic para editar este producto"
+                                                        title="Haz clic para editar este lote"
                                                     >
-                                                        <td className="px-3 py-2 text-gray-900">{item.codigo}</td>
-                                                        <td className="px-3 py-2 text-gray-900">{item.producto}</td>
-                                                        <td className="px-3 py-2 text-gray-900">{item.lote}</td>
-                                                        <td className="px-3 py-2 text-gray-900">{item.cantidad}</td>
-                                                        <td className="px-3 py-2 text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.codigo}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.productName}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{item.lote}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Number(item.cantidad).toLocaleString()}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-900">
                                                             <div className="flex flex-wrap gap-1">
                                                                 {item.contenedores.map((container, index) => (
                                                                     <span
                                                                         key={index}
-                                                                        className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
+                                                                        className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200"
                                                                     >
                                                                         {container}
                                                                     </span>
                                                                 ))}
                                                             </div>
                                                         </td>
-                                                        <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                                                            <div className="flex gap-1 justify-center">
-                                                                <button
-                                                                    onClick={() => handleEditLoteItem(idx)}
-                                                                    className="text-blue-500 hover:text-blue-700 p-1 rounded-full transition border border-transparent hover:border-blue-200"
-                                                                    title="Editar producto"
-                                                                >
+                                                        <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+                                                            <div className="flex gap-2 justify-center">
+                                                                                                    <button
+                                        onClick={() => handleEditLoteItem(idx)}
+                                        className="text-indigo-600 hover:text-indigo-900 p-1.5 rounded-md transition-colors hover:bg-indigo-50"
+                                        title="Editar lote"
+                                    >
                                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                     </svg>
                                                                 </button>
                                                                 <button
                                                                     onClick={() => handleRemoveLoteItem(idx)}
-                                                                    className="text-red-500 hover:text-red-700 p-1 rounded-full transition border border-transparent hover:border-red-200"
-                                                                    title="Eliminar producto"
+                                                                    className="text-red-600 hover:text-red-900 p-1.5 rounded-md transition-colors hover:bg-red-50"
+                                                                    title="Eliminar lote"
                                                                 >
                                                                     <FaTrash size={14} />
                                                                 </button>
@@ -1052,57 +1072,61 @@ const Navbar = () => {
                             )}
 
                             {/* Botones de acción */}
-                            <div className="flex justify-end gap-2 mt-2">
-                                {formData.producto && (
-                                    <button
-                                        className="px-4 py-2 rounded bg-gray-100 text-gray-600 font-semibold hover:bg-gray-200 transition flex items-center gap-2"
-                                        onClick={() => {
-                                            setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
-                                            setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
-                                        }}
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                        </svg>
-                                        Nuevo Producto
-                                    </button>
-                                )}
-                                {loteItems.length > 0 && (
-                                    <button
-                                        className="px-4 py-2 rounded bg-red-100 text-red-600 font-semibold hover:bg-red-200 transition flex items-center gap-2"
-                                        onClick={() => {
-                                            setLoteItems([]);
-                                            setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
-                                            setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
-                                            setBatchNumber('');
-                                        }}
-                                    >
-                                        <FaTrash size={14} />
-                                        Limpiar Todo
-                                    </button>
-                                )}
-                                <button
-                                    className="px-4 py-2 rounded bg-gray-100 text-[#2A3182] font-semibold hover:bg-gray-200 transition disabled:opacity-50"
-                                    onClick={() => setShowLoteModal(false)}
-                                    disabled={isSubmitting}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    className="px-4 py-2 rounded bg-[#2A3182] text-white font-semibold hover:bg-[#232966] transition disabled:opacity-50 flex items-center gap-2"
-                                    onClick={handleSubmit}
-                                    disabled={isSubmitting || batchLoading}
-                                >
-                                    {isSubmitting || batchLoading ? (
-                                        <>
-                                            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            <div className="flex justify-between items-center pt-6 border-t border-gray-200">
+                                <div className="flex gap-3">
+                                    {formData.producto && (
+                                        <button
+                                            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition flex items-center gap-2"
+                                            onClick={() => {
+                                                setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
+                                                setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
+                                            }}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                             </svg>
-                                            Procesando...
-                                        </>
-                                    ) : 'Crear Lote'}
-                                </button>
+                                            Limpiar Formulario
+                                        </button>
+                                    )}
+                                    {loteItems.length > 0 && (
+                                        <button
+                                            className="px-4 py-2 rounded-lg bg-red-50 text-red-600 font-medium hover:bg-red-100 transition flex items-center gap-2"
+                                            onClick={() => {
+                                                setLoteItems([]);
+                                                setFormData({ producto: '', lote: '', cantidad: '', contenedores: [] });
+                                                setErrors({ producto: '', lote: '', cantidad: '', contenedores: '' });
+                                                setBatchNumber('');
+                                            }}
+                                        >
+                                            <FaTrash size={14} />
+                                            Limpiar Todo
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        className="px-6 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition disabled:opacity-50"
+                                        onClick={() => setShowLoteModal(false)}
+                                        disabled={isSubmitting}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        className="px-6 py-2 rounded-lg bg-[#2A3182] text-white font-semibold hover:bg-[#232966] transition disabled:opacity-50 flex items-center gap-2 shadow-md"
+                                        onClick={handleSubmit}
+                                        disabled={isSubmitting || batchLoading || loteItems.length === 0}
+                                    >
+                                        {isSubmitting || batchLoading ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Procesando...
+                                            </>
+                                        ) : `Crear ${loteItems.length} Lote(s)`}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     }

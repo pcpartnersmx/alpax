@@ -5,9 +5,10 @@ import { motion } from 'framer-motion'
 import { toast } from 'react-toastify'
 import { useProducts } from '@/hooks/useProducts'
 import { useOrders } from '@/hooks/useOrders'
+import { useUpdate } from '@/contexts/UpdateContext'
 import { Product } from '@/hooks/useProducts'
 import { Order } from '@/types/pedido'
-import { FaBoxOpen, FaPlus } from 'react-icons/fa'
+import { FaBoxOpen, FaEdit, FaPlus, FaSearch } from 'react-icons/fa'
 import Modal from '../components/Essentials/Modal'
 
 interface Area {
@@ -74,11 +75,14 @@ const OrdersTableSkeleton = () => (
 export default function ResumenPage() {
     const { getProducts, loading: productsLoading } = useProducts()
     const { getOrders, loading: ordersLoading } = useOrders()
+    const { shouldUpdateResumen, markUpdated } = useUpdate()
 
     const [products, setProducts] = useState<Product[]>([])
+    const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
     const [orders, setOrders] = useState<Order[]>([])
     const [loading, setLoading] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
 
     // Estados para crear productos
     const [showModal, setShowModal] = useState(false)
@@ -91,6 +95,14 @@ export default function ResumenPage() {
     const [newAreaName, setNewAreaName] = useState('')
     const [newAreaDescription, setNewAreaDescription] = useState('')
 
+    // Estados para editar productos
+    const [showEditModal, setShowEditModal] = useState(false)
+    const [editProduct, setEditProduct] = useState<Product | null>(null)
+    const [editName, setEditName] = useState('')
+    const [editCode, setEditCode] = useState('')
+    const [editAreaId, setEditAreaId] = useState('')
+    const [editDescription, setEditDescription] = useState('')
+
     // Fetch products and all orders on component mount
     useEffect(() => {
         const fetchData = async () => {
@@ -100,6 +112,7 @@ export default function ResumenPage() {
                 const productsResponse = await getProducts()
                 if (productsResponse.success) {
                     setProducts(productsResponse.data)
+                    setFilteredProducts(productsResponse.data)
                 } else {
                     console.error('Error fetching products:', productsResponse.error)
                 }
@@ -135,6 +148,63 @@ export default function ResumenPage() {
         fetchData()
     }, [])
 
+    // Escuchar actualizaciones automáticas
+    useEffect(() => {
+        if (shouldUpdateResumen) {
+            const fetchData = async () => {
+                setLoading(true)
+                try {
+                    // Fetch products
+                    const productsResponse = await getProducts()
+                    if (productsResponse.success) {
+                        setProducts(productsResponse.data)
+                        setFilteredProducts(productsResponse.data)
+                    }
+
+                    // Fetch all orders (without product filter)
+                    const ordersResponse = await getOrders({})
+                    if (ordersResponse.success) {
+                        setOrders(ordersResponse.data)
+                    }
+
+                    // Fetch areas
+                    const areasResponse = await fetch('/api/areas')
+                    if (areasResponse.ok) {
+                        const areasResult = await areasResponse.json()
+                        if (areasResult.success) {
+                            setAreas(areasResult.data)
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching updated data:', error)
+                } finally {
+                    setLoading(false)
+                    markUpdated('resumen')
+                }
+            }
+
+            fetchData()
+        }
+    }, [shouldUpdateResumen, markUpdated])
+
+    // Filter products based on search term
+    useEffect(() => {
+        if (!searchTerm.trim()) {
+            setFilteredProducts(products)
+            return
+        }
+
+        const filtered = products.filter(product => {
+            const searchLower = searchTerm.toLowerCase()
+            return (
+                product.code.toLowerCase().includes(searchLower) ||
+                product.name.toLowerCase().includes(searchLower) ||
+                product.area.toLowerCase().includes(searchLower)
+            )
+        })
+        setFilteredProducts(filtered)
+    }, [searchTerm, products])
+
     // Fetch orders when a product is selected
     const handleProductClick = async (product: Product) => {
         setSelectedProduct(product)
@@ -159,10 +229,12 @@ export default function ResumenPage() {
     const handleRefresh = async () => {
         setLoading(true)
         setSelectedProduct(null) // Deseleccionar el producto
+        setSearchTerm('') // Limpiar búsqueda
         try {
             const response = await getProducts()
             if (response.success) {
                 setProducts(response.data)
+                setFilteredProducts(response.data)
             }
             // Cargar todos los pedidos (sin filtro de producto)
             const ordersResponse = await getOrders({})
@@ -176,58 +248,53 @@ export default function ResumenPage() {
         }
     }
 
-    const handleDownloadPDF = async () => {
-        if (!selectedProduct) {
-            alert('Por favor selecciona un producto para descargar el PDF')
-            return
-        }
-
+    const handleDownloadExcel = async () => {
         try {
             setLoading(true)
 
-            // Create PDF content
-            const pdfContent = {
-                product: selectedProduct,
-                orders: orders,
+            // Create Excel content
+            const excelContent = {
                 generatedAt: new Date().toLocaleString('es-ES')
             }
 
-            // Call the PDF generation API
-            const response = await fetch('/api/pedido/pdf-generate', {
+            // Call the Excel generation API
+            const response = await fetch('/api/pedido/excel-generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(pdfContent)
+                body: JSON.stringify(excelContent)
             })
 
             if (response.ok) {
-                // Get the PDF blob
+                // Get the Excel blob
                 const blob = await response.blob()
 
                 // Create download link
                 const url = window.URL.createObjectURL(blob)
                 const link = document.createElement('a')
                 link.href = url
-                link.download = `pedidos-${selectedProduct.code}-${new Date().toISOString().split('T')[0]}.pdf`
+                link.download = `resumen-pedidos-${new Date().toISOString().split('T')[0]}.xlsx`
                 document.body.appendChild(link)
                 link.click()
                 document.body.removeChild(link)
                 window.URL.revokeObjectURL(url)
+                
+                toast.success('Excel descargado exitosamente')
             } else {
                 // Try to get error message from response
-                let errorMessage = 'Error al generar el PDF'
+                let errorMessage = 'Error al generar el Excel'
                 try {
                     const errorData = await response.json()
                     errorMessage = errorData.error || errorMessage
                 } catch {
                     // If response is not JSON, use default message
                 }
-                alert(errorMessage)
+                toast.error(errorMessage)
             }
         } catch (error) {
-            console.error('Error downloading PDF:', error)
-            alert('Error al descargar el PDF')
+            console.error('Error downloading Excel:', error)
+            toast.error('Error al descargar el Excel')
         } finally {
             setLoading(false)
         }
@@ -251,6 +318,7 @@ export default function ResumenPage() {
             const response = await getProducts()
             if (response.success) {
                 setProducts(response.data)
+                setFilteredProducts(response.data)
             }
         } catch (error) {
             console.error('Error reloading productos:', error)
@@ -287,6 +355,61 @@ export default function ResumenPage() {
         } catch (error) {
             console.error('Error creating product:', error)
             toast.error('Error al crear el producto')
+        }
+    }
+
+    // Funciones para editar productos
+    const handleEditProduct = (product: Product, e: React.MouseEvent) => {
+        e.stopPropagation() // Evitar que se seleccione el producto
+        setEditProduct(product)
+        setEditName(product.name)
+        setEditCode(product.code)
+        setEditAreaId(areas.find(area => area.name === product.area)?.id || '')
+        setEditDescription(product.description || '')
+        setShowEditModal(true)
+    }
+
+    const handleCloseEditModal = () => {
+        setShowEditModal(false)
+        setEditProduct(null)
+        setEditName('')
+        setEditCode('')
+        setEditAreaId('')
+        setEditDescription('')
+    }
+
+    const handleEditSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!editProduct) return
+
+        try {
+            const response = await fetch(`/api/productos/${editProduct.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: editName,
+                    code: editCode,
+                    areaId: editAreaId,
+                    description: editDescription
+                }),
+            })
+
+            if (response.ok) {
+                const result = await response.json()
+                // Recargar la lista completa para asegurar consistencia
+                await reloadProductos()
+                handleCloseEditModal()
+                // Mostrar mensaje de éxito
+                toast.success('Producto actualizado exitosamente')
+            } else {
+                const error = await response.json()
+                toast.error(error.error || 'Error al actualizar el producto')
+            }
+        } catch (error) {
+            console.error('Error updating product:', error)
+            toast.error('Error al actualizar el producto')
         }
     }
 
@@ -362,13 +485,13 @@ export default function ResumenPage() {
 
                             <motion.button
                                 className="flex items-center cursor-pointer gap-2 bg-[#2A3182] hover:bg-[#23285e] text-white px-5 h-10 rounded-[8px] text-base font-semibold shadow-sm"
-                                onClick={handleDownloadPDF}
-                                disabled={loading || !selectedProduct}
+                                onClick={handleDownloadExcel}
+                                disabled={loading}
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                             >
                                 <DownloadIcon />
-                                <span>Descargar</span>
+                                <span>Descargar Resumen</span>
                             </motion.button>
 
                             <motion.button
@@ -394,6 +517,46 @@ export default function ResumenPage() {
                             </motion.button>
                         </motion.div>
 
+                        {/* Search Bar */}
+                        <motion.div
+                            className="mb-6"
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4 }}
+                        >
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none">
+                                    <FaSearch className="h-4 w-4 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="block w-full pl-10 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-[#2A3182] focus:border-transparent"
+                                    placeholder="Buscar por código, nombre o área..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                {searchTerm && (
+                                    <button
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute inset-y-0 right-0 flex items-center"
+                                    >
+                                        <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
+                            {searchTerm && (
+                                <motion.p
+                                    className="text-sm text-gray-600 mt-2"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                >
+                                    Mostrando {filteredProducts.length} de {products.length} productos
+                                </motion.p>
+                            )}
+                        </motion.div>
+
                         {loading && productsLoading ? (
                             <ProductsTableSkeleton />
                         ) : (
@@ -409,11 +572,11 @@ export default function ResumenPage() {
                                             <th className="py-2 px-4 text-left font-bold">CÓDIGO</th>
                                             <th className="py-2 px-4 text-left font-bold">NOMBRE</th>
                                             <th className="py-2 px-4 text-left font-bold">ÁREA</th>
-                                            <th className="py-2 px-4 text-left font-bold">DESCRIPCIÓN</th>
+                                            <th className="py-2 px-4 text-left font-bold">ACCION</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {products.map((product, i) => (
+                                        {filteredProducts.map((product, i) => (
                                             <motion.tr
                                                 key={product.id}
                                                 className={`cursor-pointer hover:bg-[#E6E5B6] transition-colors ${selectedProduct?.id === product.id ? 'bg-[#E6E5B6]' :
@@ -428,7 +591,14 @@ export default function ResumenPage() {
                                                 <td className="py-2 px-4 align-middle font-medium">{product.code}</td>
                                                 <td className="py-2 px-4 align-middle">{product.name}</td>
                                                 <td className="py-2 px-4 align-middle">{product.area}</td>
-                                                <td className="py-2 px-4 align-middle">{product.description || '-'}</td>
+                                                <td className="py-2 px-4 align-middle">
+                                                    <button 
+                                                        className="text-blue-500 hover:text-blue-700"
+                                                        onClick={(e) => handleEditProduct(product, e)}
+                                                    >
+                                                        <FaEdit />
+                                                    </button>
+                                                </td>
                                             </motion.tr>
                                         ))}
                                     </tbody>
@@ -436,14 +606,14 @@ export default function ResumenPage() {
                             </motion.div>
                         )}
 
-                        {products.length === 0 && !loading && (
+                        {filteredProducts.length === 0 && !loading && (
                             <motion.div
                                 className="text-center py-8 text-gray-500"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.7 }}
                             >
-                                No hay productos disponibles
+                                {searchTerm ? 'No se encontraron productos que coincidan con la búsqueda' : 'No hay productos disponibles'}
                             </motion.div>
                         )}
                     </motion.div>
@@ -757,6 +927,126 @@ export default function ResumenPage() {
                                         whileTap={{ scale: 0.95 }}
                                     >
                                         Crear Área
+                                    </motion.button>
+                                </motion.div>
+                            </form>
+                        </div>
+                    }
+                />
+            )}
+
+            {/* Modal para editar productos */}
+            {showEditModal && (
+                <Modal
+                    title="Editar Producto"
+                    message="Complete los datos del producto a editar"
+                    size="md"
+                    className="w-[25%] max-h-[90vh] overflow-y-auto"
+                    onClose={handleCloseEditModal}
+                    body={
+                        <div className="w-full text-left">
+                            <form onSubmit={handleEditSubmit}>
+                                <motion.div
+                                    className="mb-4"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                >
+                                    <label className="block text-gray-700 font-semibold mb-1">Área</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="flex-1 px-3 py-2 border rounded bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2A3182] focus:border-transparent"
+                                            value={editAreaId}
+                                            onChange={e => setEditAreaId(e.target.value)}
+                                            required
+                                        >
+                                            <option value="">Seleccionar área</option>
+                                            {areas.map((area) => (
+                                                <option key={area.id} value={area.id}>
+                                                    {area.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <motion.button
+                                            type="button"
+                                            className="px-3 py-2 bg-[#2A3182] text-white rounded hover:bg-[#23285e] transition-colors duration-150"
+                                            onClick={() => setShowAreaModal(true)}
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                        >
+                                            <FaPlus className="h-4 w-4" />
+                                        </motion.button>
+                                    </div>
+                                </motion.div>
+                                <motion.div
+                                    className="mb-4"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.4 }}
+                                >
+                                    <label className="block text-gray-700 font-semibold mb-1">Nombre del Producto</label>
+                                    <input
+                                        className="w-full px-3 py-2 border rounded bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2A3182] focus:border-transparent"
+                                        type="text"
+                                        placeholder="Nombre del producto"
+                                        value={editName}
+                                        onChange={e => setEditName(e.target.value)}
+                                        required
+                                    />
+                                </motion.div>
+                                <motion.div
+                                    className="mb-4"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.5 }}
+                                >
+                                    <label className="block text-gray-700 font-semibold mb-1">Código</label>
+                                    <input
+                                        className="w-full px-3 py-2 border rounded bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2A3182] focus:border-transparent"
+                                        type="text"
+                                        placeholder="Código"
+                                        value={editCode}
+                                        onChange={e => setEditCode(e.target.value)}
+                                        required
+                                    />
+                                </motion.div>
+                                <motion.div
+                                    className="mb-4"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.6 }}
+                                >
+                                    <label className="block text-gray-700 font-semibold mb-1">Descripción</label>
+                                    <textarea
+                                        className="w-full px-3 py-2 border rounded bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2A3182] focus:border-transparent"
+                                        placeholder="Descripción (opcional)"
+                                        value={editDescription}
+                                        onChange={e => setEditDescription(e.target.value)}
+                                        rows={3}
+                                    />
+                                </motion.div>
+                                <motion.div
+                                    className="flex justify-end gap-4"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.7 }}
+                                >
+                                    <motion.button
+                                        type="button"
+                                        className="text-gray-500 px-4 py-2 rounded hover:bg-gray-100"
+                                        onClick={handleCloseEditModal}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        Cancelar
+                                    </motion.button>
+                                    <motion.button
+                                        type="submit"
+                                        className="bg-[#2A3182] text-white px-6 py-2 rounded-lg hover:bg-[#23285e]"
+                                        whileHover={{ scale: 1.05, y: -2 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        Guardar Cambios
                                     </motion.button>
                                 </motion.div>
                             </form>

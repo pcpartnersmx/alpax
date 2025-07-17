@@ -11,14 +11,13 @@ export async function GET(
 
     const product = await prisma.product.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        area: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true
+      include: {
+        area: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
 
@@ -33,9 +32,21 @@ export async function GET(
       );
     }
 
+    // Transformar los datos para mantener compatibilidad con el frontend
+    const transformedProduct = {
+      id: product.id,
+      name: product.name,
+      code: product.code,
+      area: product.area?.name, // Mantener el nombre del área para compatibilidad
+      areaId: product.areaId,
+      description: product.description,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt
+    };
+
     return NextResponse.json({
       success: true,
-      data: product
+      data: transformedProduct
     });
 
   } catch (error) {
@@ -59,10 +70,10 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, code, area, description } = body;
+    const { name, code, areaId, description } = body;
 
     // Validación de campos requeridos
-    if (!name || !code || !area) {
+    if (!name || !code || !areaId) {
       return NextResponse.json(
         { 
           success: false,
@@ -85,6 +96,21 @@ export async function PUT(
           message: 'El producto con el ID especificado no existe'
         },
         { status: 404 }
+      );
+    }
+
+    // Verificar si el área existe
+    const area = await prisma.area.findUnique({
+      where: { id: areaId }
+    });
+
+    if (!area) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'El área seleccionada no existe'
+        },
+        { status: 400 }
       );
     }
 
@@ -112,24 +138,35 @@ export async function PUT(
       data: {
         name,
         code,
-        area,
+        areaId,
         description: description || null
       },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        area: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true
+      include: {
+        area: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
+
+    // Transformar los datos para mantener compatibilidad con el frontend
+    const transformedProduct = {
+      id: updatedProduct.id,
+      name: updatedProduct.name,
+      code: updatedProduct.code,
+      area: updatedProduct.area?.name, // Mantener el nombre del área para compatibilidad
+      areaId: updatedProduct.areaId,
+      description: updatedProduct.description,
+      createdAt: updatedProduct.createdAt,
+      updatedAt: updatedProduct.updatedAt
+    };
 
     return NextResponse.json({
       success: true,
       message: 'Producto actualizado exitosamente',
-      data: updatedProduct
+      data: transformedProduct
     });
 
   } catch (error) {

@@ -88,6 +88,18 @@ export async function PUT(
             );
         }
 
+        // Obtener el usuario
+        const user = await prisma.user.findUnique({
+            where: { email: session.user.email }
+        });
+
+        if (!user) {
+            return NextResponse.json(
+                { success: false, error: 'Usuario no encontrado' },
+                { status: 404 }
+            );
+        }
+
         const { id } = await params;
         const body = await request.json();
         const { status, orderNotes } = body;
@@ -136,7 +148,7 @@ export async function PUT(
             data: {
                 action: 'UPDATE_ORDER',
                 description: `Pedido ${updatedOrder.orderNumber} actualizado`,
-                userId: session.user.id as string,
+                userId: user.id,
                 orderId: id
             }
         });
@@ -170,6 +182,18 @@ export async function DELETE(
             );
         }
 
+        // Obtener el usuario
+        const user = await prisma.user.findUnique({
+            where: { email: session.user.email }
+        });
+
+        if (!user) {
+            return NextResponse.json(
+                { success: false, error: 'Usuario no encontrado' },
+                { status: 404 }
+            );
+        }
+
         const { id } = await params;
 
         // Verificar que el pedido existe
@@ -194,7 +218,7 @@ export async function DELETE(
             data: {
                 action: 'DELETE_ORDER',
                 description: `Pedido ${existingOrder.orderNumber} eliminado`,
-                userId: session.user.id as string
+                userId: user.id
             }
         });
 

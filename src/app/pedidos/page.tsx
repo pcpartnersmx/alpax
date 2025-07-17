@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Table from "../components/Essentials/Table";
 import Modal from "../components/Essentials/Modal";
-import { FaRegEdit, FaRegTrashAlt, FaBoxOpen, FaStickyNote } from "react-icons/fa";
+import { FaEdit, FaTrash, FaBoxOpen, FaStickyNote } from "react-icons/fa";
 import { IoDocumentOutline } from "react-icons/io5";
 import { useOrders } from "@/hooks/useOrders";
+import { useUpdate } from "@/contexts/UpdateContext";
 import { Order } from "@/types/pedido";
 
 const columns = [
@@ -34,13 +35,15 @@ const TableSkeleton = () => (
 );
 
 export default function PedidosPage() {
-  const { getOrders, loading } = useOrders();
+  const { getOrders, updateOrder, loading } = useOrders();
+  const { shouldUpdatePedidos, markUpdated } = useUpdate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [currentNote, setCurrentNote] = useState("");
   const [selectedOrderForNotes, setSelectedOrderForNotes] = useState<Order | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -57,6 +60,25 @@ export default function PedidosPage() {
     fetchOrders();
   }, [pagination.page, pagination.limit]);
 
+  // Escuchar actualizaciones automáticas
+  useEffect(() => {
+    if (shouldUpdatePedidos) {
+      const fetchOrders = async () => {
+        const params = {
+          page: pagination.page,
+          limit: pagination.limit,
+        };
+        const res = await getOrders(params);
+        if (res.success) {
+          setOrders(res.data);
+          setPagination(res.pagination);
+        }
+        markUpdated('pedidos');
+      };
+      fetchOrders();
+    }
+  }, [shouldUpdatePedidos, markUpdated, pagination.page, pagination.limit]);
+
   const handleNotesClick = (order: Order, event: React.MouseEvent) => {
     event.stopPropagation();
     setSelectedOrderForNotes(order);
@@ -66,26 +88,40 @@ export default function PedidosPage() {
 
   const handleSaveNote = async () => {
     if (selectedOrderForNotes) {
-      // Aquí puedes implementar la lógica para guardar la nota en la base de datos
-      console.log("Guardando nota:", currentNote, "para pedido:", selectedOrderForNotes.id);
+      setSavingNote(true);
+      try {
+        // Usar el campo orderNotes simple
+        const result = await updateOrder(selectedOrderForNotes.id, {
+          orderNotes: currentNote
+        });
 
-      // Actualizar el pedido en el estado local
-      setOrders(prevOrders =>
-        prevOrders.map(order =>
-          order.id === selectedOrderForNotes.id
-            ? { ...order, orderNotes: currentNote }
-            : order
-        )
-      );
+        if (result.success && result.data) {
+          // Actualizar el pedido en el estado local
+          setOrders(prevOrders =>
+            prevOrders.map(order =>
+              order.id === selectedOrderForNotes.id
+                ? { ...order, orderNotes: currentNote }
+                : order
+            )
+          );
 
-      // Si el pedido seleccionado es el mismo, actualizarlo también
-      if (selectedOrder?.id === selectedOrderForNotes.id) {
-        setSelectedOrder(prev => prev ? { ...prev, orderNotes: currentNote } : null);
+          // Si el pedido seleccionado es el mismo, actualizarlo también
+          if (selectedOrder?.id === selectedOrderForNotes.id) {
+            setSelectedOrder(prev => prev ? { ...prev, orderNotes: currentNote } : null);
+          }
+
+          console.log("Nota guardada exitosamente");
+        } else {
+          console.error("Error al guardar la nota:", result.error);
+        }
+      } catch (error) {
+        console.error("Error al guardar la nota:", error);
+      } finally {
+        setSavingNote(false);
+        setShowNotesModal(false);
+        setSelectedOrderForNotes(null);
+        setCurrentNote("");
       }
-
-      setShowNotesModal(false);
-      setSelectedOrderForNotes(null);
-      setCurrentNote("");
     }
   };
 
@@ -110,8 +146,8 @@ export default function PedidosPage() {
           title={order.orderNotes ? "Ver/Editar Nota" : "Agregar Nota"}
           onClick={(e) => handleNotesClick(order, e)}
         />
-        <FaRegEdit className="text-blue-500 cursor-pointer" title="Editar" />
-        <FaRegTrashAlt className="text-red-500 cursor-pointer" title="Eliminar" />
+                                        <FaEdit className="text-blue-500 cursor-pointer" title="Editar" />
+        <FaTrash className="text-red-500 cursor-pointer" title="Eliminar" />
       </td>
     </tr>
   ));
@@ -185,7 +221,7 @@ export default function PedidosPage() {
               transition={{ duration: 0.4, delay: 0.1 }}
             >
               <motion.table 
-                className="w-full text-sm border rounded overflow-hidden"
+                className="w-full text-sm border rounded-lg overflow-hidden"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, delay: 0.2 }}
@@ -193,7 +229,7 @@ export default function PedidosPage() {
                 <thead className="bg-gray-400 text-white">
                   <tr>
                     {detalleColumns.map((col) => (
-                      <th key={col.key} className="p-2 text-left font-semibold">{col.title}</th>
+                      <th key={col.key} className={`p-2 font-semibold ${col.key === 'cantidad' || col.key === 'completado' || col.key === 'restante' ? 'text-right' : 'text-left'}`}>{col.title}</th>
                     ))}
                   </tr>
                 </thead>
@@ -219,9 +255,11 @@ export default function PedidosPage() {
                         <td className="p-2">{item.product.code}</td>
                         <td className="p-2">{item.product.name}</td>
                         <td className="p-2">{item.product.area?.name || "-"}</td>
-                        <td className="p-2">{item.quantity.toLocaleString()}</td>
-                        <td className="p-2">{completado.toLocaleString()}</td>
-                        <td className={`p-2 text-white text-center font-bold rounded ${restanteColor}`}>{restante > 0 ? restante : 0}</td>
+                        <td className="p-2 text-right">{item.quantity.toLocaleString()}</td>
+                        <td className="p-2 text-right">{completado.toLocaleString()}</td>
+                        <td className={`p-2 text-white text-right font-bold ${restanteColor}`}>
+                          {restante > 0 ? (restante).toLocaleString() : (restante).toLocaleString()}
+                        </td>
                       </motion.tr>
                     );
                   })}
@@ -245,6 +283,9 @@ export default function PedidosPage() {
               <div className="text-left mb-2">
                 <label htmlFor="nota" className="block text-base font-semibold text-gray-700 mb-1">Nota</label>
               </div>
+              
+
+              
               <textarea
                 id="nota"
                 value={currentNote}
@@ -255,15 +296,25 @@ export default function PedidosPage() {
               <div className="flex justify-end gap-4 mt-6">
                 <button
                   onClick={handleCloseNotesModal}
-                  className="px-4 py-2 cursor-pointer text-gray-500 font-medium rounded hover:bg-gray-100 transition-colors"
+                  disabled={savingNote}
+                  className={`px-4 py-2 cursor-pointer text-gray-500 font-medium rounded transition-colors ${
+                    savingNote 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:bg-gray-100'
+                  }`}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveNote}
-                  className="px-5 py-2 cursor-pointer bg-[#2d2e83] text-white font-semibold rounded hover:bg-[#23235e] transition-colors"
+                  disabled={savingNote}
+                  className={`px-5 py-2 cursor-pointer bg-[#2d2e83] text-white font-semibold rounded transition-colors ${
+                    savingNote 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:bg-[#23235e]'
+                  }`}
                 >
-                  Agregar
+                  {savingNote ? 'Guardando...' : 'Guardar Nota'}
                 </button>
               </div>
             </div>

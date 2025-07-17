@@ -94,7 +94,7 @@ model OrderItem {
 
 model Batch {
   id            String    @id @default(cuid())
-  batchNumber   String    @unique
+  batchNumber   String    
   name          String
   description   String?
   status        BatchStatus @default(ACTIVE)
@@ -134,6 +134,7 @@ model BatchItem {
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItemId   String?   // Relación opcional con el item del pedido que se está llenando
   orderItem     OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  notes         Note[]    // Notas asociadas a este batch item
 }
 
 model Note {
@@ -148,6 +149,8 @@ model Note {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   orderId       String?
   order         Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  batchItemId   String?
+  batchItem     BatchItem? @relation(fields: [batchItemId], references: [id], onDelete: Cascade)
 }
 
 model Log {
@@ -204,4 +207,5 @@ enum NoteType {
   ORDER_NOTE
   GENERAL_NOTE
   SYSTEM_NOTE
+  BATCH_ITEM_NOTE
 }

@@ -37,6 +37,8 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
         console.log(`Cantidad disponible para asignar: ${remainingQuantity}`);
 
         // Asignar a cada pedido pendiente
+        let lastAssignedOrder = null;
+        let lastAssignedOrderItem = null;
         for (const order of pendingOrders) {
             if (remainingQuantity <= 0) break;
 
@@ -51,17 +53,13 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
                 console.log(`  Item del pedido: ${orderItem.quantity} total, ${orderItem.completedQuantity || 0} completado, ${pendingQuantity} pendiente`);
 
                 if (assignQuantity > 0) {
-                    // Asignar la cantidad
                     await prisma.$transaction(async (tx) => {
-                        // Actualizar el batchItem para asignarlo al pedido
                         await tx.batchItem.update({
                             where: { id: batchItem.id },
                             data: {
                                 orderItemId: orderItem.id
                             }
                         });
-
-                        // Actualizar la cantidad completada del pedido
                         await tx.orderItem.update({
                             where: { id: orderItem.id },
                             data: {
@@ -70,17 +68,12 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
                                 }
                             }
                         });
-
-                        // Verificar si el pedido está completo
                         const allOrderItems = await tx.orderItem.findMany({
                             where: { orderId: order.id }
                         });
-
                         const isOrderComplete = allOrderItems.every(item => 
                             (item.completedQuantity || 0) >= item.quantity
                         );
-
-                        // Actualizar estado del pedido
                         if (isOrderComplete) {
                             await tx.order.update({
                                 where: { id: order.id },
@@ -90,7 +83,6 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
                             const hasInProgressItems = allOrderItems.some(item => 
                                 (item.completedQuantity || 0) > 0 && (item.completedQuantity || 0) < item.quantity
                             );
-                            
                             if (hasInProgressItems) {
                                 await tx.order.update({
                                     where: { id: order.id },
@@ -98,8 +90,6 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
                                 });
                             }
                         }
-
-                        // Crear log de la asignación
                         await tx.log.create({
                             data: {
                                 action: 'AUTO_ASSIGN_BATCH_TO_ORDER',
@@ -111,7 +101,6 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
                             }
                         });
                     });
-
                     assignments.push({
                         orderNumber: order.orderNumber,
                         orderItemId: orderItem.id,
@@ -119,10 +108,49 @@ export async function assignBatchItemToPendingOrders(batchItem: any, userId: str
                         pendingBefore: pendingQuantity,
                         pendingAfter: pendingQuantity - assignQuantity
                     });
-
                     remainingQuantity -= assignQuantity;
+                    lastAssignedOrder = order;
+                    lastAssignedOrderItem = orderItem;
                 }
             }
+        }
+
+        // Si queda sobrante y hubo al menos un pedido asignado, asignar el sobrante al último pedido
+        if (remainingQuantity > 0 && lastAssignedOrder && lastAssignedOrderItem) {
+            await prisma.$transaction(async (tx) => {
+                await tx.batchItem.update({
+                    where: { id: batchItem.id },
+                    data: {
+                        orderItemId: lastAssignedOrderItem.id
+                    }
+                });
+                await tx.orderItem.update({
+                    where: { id: lastAssignedOrderItem.id },
+                    data: {
+                        completedQuantity: {
+                            increment: remainingQuantity
+                        }
+                    }
+                });
+                await tx.log.create({
+                    data: {
+                        action: 'OVER_ASSIGN_BATCH_TO_ORDER',
+                        description: `Asignación de sobrante: ${remainingQuantity} unidades extra del lote ${batchItem.id} al pedido ${lastAssignedOrder.orderNumber}`,
+                        quantity: remainingQuantity,
+                        userId: userId,
+                        orderId: lastAssignedOrder.id,
+                        productId: batchItem.productId
+                    }
+                });
+            });
+            assignments.push({
+                orderNumber: lastAssignedOrder.orderNumber,
+                orderItemId: lastAssignedOrderItem.id,
+                assignedQuantity: remainingQuantity,
+                pendingBefore: 0,
+                pendingAfter: 0 - remainingQuantity
+            });
+            remainingQuantity = 0;
         }
 
         const result = {

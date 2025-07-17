@@ -4,6 +4,39 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { assignBatchItemToPendingOrders } from '@/lib/assignmentUtils';
 
+// Función para generar el batchNumber automático con formato N-{consecutivo}-{año}
+async function generateBatchNumber(): Promise<string> {
+    const currentYear = new Date().getFullYear();
+    
+    // Buscar el último lote del año actual con formato N-XXX-YYYY
+    const lastBatch = await prisma.batch.findFirst({
+        where: {
+            batchNumber: {
+                startsWith: 'N-',
+                endsWith: `-${currentYear}`
+            }
+        },
+        orderBy: {
+            batchNumber: 'desc'
+        }
+    });
+
+    let nextConsecutive = 1;
+    
+    if (lastBatch) {
+        // Extraer el consecutivo del último lote
+        const match = lastBatch.batchNumber.match(/N-(\d+)-(\d+)/);
+        if (match && parseInt(match[2]) === currentYear) {
+            nextConsecutive = parseInt(match[1]) + 1;
+        }
+    }
+
+    // Formatear el consecutivo con ceros a la izquierda (ej: 001, 002, etc.)
+    const formattedConsecutive = nextConsecutive.toString().padStart(3, '0');
+    
+    return `N-${formattedConsecutive}-${currentYear}`;
+}
+
 
 
 export async function POST(request: NextRequest) {
@@ -33,145 +66,156 @@ export async function POST(request: NextRequest) {
 
         console.log("lotes", body)
 
-        const { batchNumber, name, description, items } = body;
+        const { name, description, items } = body;
 
-        console.log("Datos recibidos:", { batchNumber, name, description, items });
+        console.log("Datos recibidos:", { name, description, items });
 
-    console.log("items:", items)
-
-    const existingBatch = await prisma.batch.findUnique({
-        where: { batchNumber }
-    });
-
-
-    if (existingBatch) {
-        return NextResponse.json(
-            { success: false, error: 'El número de lote ya existe' },
-            { status: 400 }
-        );
-    }
-
-    console.log("nuevo batch")
-
-    const batchItems: Array<{
-        productId: string;
-        quantity: number;
-    }> = [];
-
-
-
-    for (const item of items) {
-        if (!item.productId || !item.quantity || item.quantity <= 0) {
+        // Validar que hay items
+        if (!items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json(
-                { success: false, error: 'Datos inválidos en los items del lote' },
+                { success: false, error: 'Debe proporcionar al menos un lote' },
                 { status: 400 }
             );
         }
-        // Verificar que el producto existe
-        const product = await prisma.product.findUnique({
-            where: { id: item.productId }
-        });
-        if (!product) {
-            return NextResponse.json(
-                { success: false, error: `Producto con ID ${item.productId} no encontrado` },
-                { status: 404 }
-            );
-        }
-        batchItems.push({
-            productId: item.productId,
-            quantity: item.quantity
-        });
-    }
 
-
-    console.log("batchItems:", batchItems)
-
-
-    const newBatch = await prisma.batch.create({
-        data: {
-            batchNumber,
-            name,
-            description: description || null,
-            status: 'ACTIVE'
-        }
-    });
-
-    if (!newBatch) {
-        return NextResponse.json(
-            { success: false, error: 'Error al crear el lote' },
-            { status: 500 }
-        );
-    }
-
-    console.log("newBatch:", newBatch)
-
-    // Crear los items del lote si se proporcionan
-    if (batchItems.length > 0) {
-        console.log("Creando contenedor y items del lote...");
-        
-        // Crear un contenedor por defecto para los items
-        const defaultContainer = await prisma.container.create({
-            data: {
-                containerCode: `CONT-${batchNumber}`,
-                name: `Contenedor ${batchNumber}`,
-                description: `Contenedor por defecto del lote ${batchNumber}`,
-                status: 'ACTIVE',
-                batchId: newBatch.id
+        // Validar cada item
+        for (const item of items) {
+            if (!item.productId || !item.lotNumber || !item.quantity || item.quantity <= 0) {
+                return NextResponse.json(
+                    { success: false, error: 'Datos inválidos en los items del lote' },
+                    { status: 400 }
+                );
             }
-        });
+            
+            // Verificar que el producto existe
+            const product = await prisma.product.findUnique({
+                where: { id: item.productId }
+            });
+            if (!product) {
+                return NextResponse.json(
+                    { success: false, error: `Producto con ID ${item.productId} no encontrado` },
+                    { status: 404 }
+                );
+            }
+        }
 
-        console.log("Contenedor creado:", defaultContainer.id);
+        // Crear múltiples lotes (uno por cada item)
+        const createdBatches = [];
+        const allAssignments = [];
 
-        // Crear los items del lote en el contenedor
-        const createdItems = await Promise.all(
-            batchItems.map(async (item) => {
-                console.log(`Creando item para producto ${item.productId} con cantidad ${item.quantity}`);
-                return await prisma.batchItem.create({
+        // Generar UN SOLO batchNumber (folio) para toda la salida
+        const batchNumber = await generateBatchNumber();
+        console.log(`Creando salida con folio: ${batchNumber}`);
+
+        for (const item of items) {
+            console.log(`Creando lote para producto ${item.productName} con número de lote: ${item.lotNumber}`);
+
+            // Crear el lote usando el mismo batchNumber (folio de la salida)
+            const newBatch = await prisma.batch.create({
+                data: {
+                    batchNumber, // Mismo folio para toda la salida
+                    name: item.lotNumber, // Guardar el número de lote ingresado por el usuario en el campo name
+                    description: description || `Lote ${item.lotNumber} de ${item.productName}`,
+                    status: 'ACTIVE'
+                }
+            });
+
+            if (!newBatch) {
+                return NextResponse.json(
+                    { success: false, error: 'Error al crear el lote' },
+                    { status: 500 }
+                );
+            }
+
+            // Crear contenedores para este lote
+            const containers = [];
+            if (item.containers && item.containers.length > 0) {
+                // Crear contenedores específicos para este lote
+                for (const containerCode of item.containers) {
+                    // Verificar si el contenedor ya existe
+                    let container = await prisma.container.findUnique({
+                        where: { containerCode: containerCode }
+                    });
+                    
+                    if (!container) {
+                        // Crear el contenedor si no existe
+                        container = await prisma.container.create({
+                            data: {
+                                containerCode: containerCode,
+                                name: `Contenedor ${containerCode}`,
+                                description: `Contenedor ${containerCode} del lote ${item.lotNumber}`,
+                                status: 'ACTIVE',
+                                batchId: newBatch.id
+                            }
+                        });
+                    } else {
+                        // Si el contenedor ya existe, actualizar su batchId
+                        container = await prisma.container.update({
+                            where: { id: container.id },
+                            data: {
+                                batchId: newBatch.id,
+                                description: `Contenedor ${containerCode} del lote ${item.lotNumber}`
+                            }
+                        });
+                    }
+                    containers.push(container);
+                }
+            } else {
+                // Crear un contenedor por defecto
+                const defaultContainer = await prisma.container.create({
                     data: {
-                        ...item,
-                        containerId: defaultContainer.id
-                    },
-                    include: {
-                        product: true,
-                        container: true
+                        containerCode: `CONT-${item.lotNumber}`,
+                        name: `Contenedor ${item.lotNumber}`,
+                        description: `Contenedor por defecto del lote ${item.lotNumber}`,
+                        status: 'ACTIVE',
+                        batchId: newBatch.id
                     }
                 });
-            })
-        );
+                containers.push(defaultContainer);
+            }
 
-        console.log(`Creados ${createdItems.length} items del lote`);
+            // Crear el batch item en el primer contenedor
+            const batchItem = await prisma.batchItem.create({
+                data: {
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    containerId: containers[0].id
+                },
+                include: {
+                    product: true,
+                    container: true
+                }
+            });
 
-        // Asignar automáticamente las salidas a pedidos pendientes
-        console.log("Iniciando asignación automática...");
-        const assignmentResults = await Promise.all(
-            createdItems.map(async (batchItem) => {
-                console.log(`Asignando item ${batchItem.id} (${batchItem.product.name})`);
-                return await assignBatchItemToPendingOrders(batchItem, user.id);
-            })
-        );
+            // Asignar automáticamente a pedidos pendientes
+            console.log(`Asignando lote ${item.lotNumber} (${item.productName})`);
+            const assignmentResult = await assignBatchItemToPendingOrders(batchItem, user.id);
 
-        console.log("Resultados de asignación:", assignmentResults);
+            createdBatches.push({
+                ...newBatch,
+                containers: containers,
+                batchItems: [batchItem],
+                assignments: [assignmentResult]
+            });
+
+            allAssignments.push(assignmentResult);
+        }
+
+        console.log(`Creados ${createdBatches.length} lotes en la salida ${batchNumber}`);
 
         return NextResponse.json({
             success: true,
             data: {
-                ...newBatch,
-                containers: [defaultContainer],
-                batchItems: createdItems,
-                assignments: assignmentResults
+                batchNumber, // Folio de la salida
+                batches: createdBatches,
+                totalBatches: createdBatches.length,
+                assignments: allAssignments
             },
-            message: 'Lote creado exitosamente con asignaciones automáticas'
+            message: `Salida ${batchNumber} creada exitosamente con ${createdBatches.length} lote(s) y asignaciones automáticas`
         });
-    }
-
-    return NextResponse.json({
-        success: true,
-        data: newBatch,
-        message: 'Lote creado exitosamente'
-    });
 
     } catch (error) {
-        console.error('Error creando lote:', error);
+        console.error('Error creando lotes:', error);
         return NextResponse.json(
             { success: false, error: 'Error interno del servidor' },
             { status: 500 }
@@ -299,7 +343,7 @@ export async function PUT(request: NextRequest) {
                 where: { orderId: orderItem.orderId }
             });
 
-            const isOrderComplete = allOrderItems.every(item => 
+            const isOrderComplete = allOrderItems.every(item =>
                 (item.completedQuantity || 0) >= item.quantity
             );
 
@@ -311,10 +355,10 @@ export async function PUT(request: NextRequest) {
                 });
             } else {
                 // Si no está completo pero tiene items en progreso, cambiar a IN_PROGRESS
-                const hasInProgressItems = allOrderItems.some(item => 
+                const hasInProgressItems = allOrderItems.some(item =>
                     (item.completedQuantity || 0) > 0 && (item.completedQuantity || 0) < item.quantity
                 );
-                
+
                 if (hasInProgressItems) {
                     await tx.order.update({
                         where: { id: orderItem.orderId },
@@ -392,6 +436,11 @@ export async function GET(request: NextRequest) {
                                 product: {
                                     include: {
                                         area: true
+                                    }
+                                },
+                                orderItem: {
+                                    include: {
+                                        order: true
                                     }
                                 }
                             }

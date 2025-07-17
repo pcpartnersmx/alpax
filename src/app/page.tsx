@@ -1,12 +1,14 @@
-
 "use client"
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Table from './components/Essentials/Table'
 import Input from './components/Essentials/Input'
 import Select from './components/Essentials/Select'
-import { FaSearch, FaFileAlt, FaEdit, FaTrash, FaExclamationTriangle, FaFile, FaPen, FaLink } from 'react-icons/fa'
+import { FaSearch, FaEdit, FaTrash, FaExclamationTriangle, FaStickyNote, FaLink } from 'react-icons/fa'
 import { useAssignments } from '@/hooks/useAssignments'
+import { useUpdate } from '@/contexts/UpdateContext'
+import NotesModal from './components/NotesModal'
+import { useNotes } from '@/hooks/useNotes'
 
 // Definir tipos para los datos
 interface Product {
@@ -23,6 +25,7 @@ interface Product {
 }
 
 interface BatchItem {
+  orderItem: any
   id: string
   quantity: number
   product: Product
@@ -68,6 +71,7 @@ interface TableRow {
   cantidad: number
   id: string
   productId: string
+  batchItem: BatchItem
 }
 
 const page = () => {
@@ -84,8 +88,46 @@ const page = () => {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [selectedOrderItem, setSelectedOrderItem] = useState<any>(null)
   const [assignQuantity, setAssignQuantity] = useState('')
-  
+  const [showNotesModal, setShowNotesModal] = useState(false)
+  const [selectedBatchItemForNotes, setSelectedBatchItemForNotes] = useState<any>(null)
+  const [batchItemsWithNotes, setBatchItemsWithNotes] = useState<Set<string>>(new Set())
+
   const { getPendingOrders, assignBatchToOrder, loading: assignLoading } = useAssignments()
+  const { shouldUpdateBitacora, markUpdated } = useUpdate();
+  const { getNotes } = useNotes();
+
+  const handleOpenNotes = (batchItem: BatchItem) => {
+    setSelectedBatchItemForNotes(batchItem)
+    setShowNotesModal(true)
+  }
+
+  const handleCloseNotes = () => {
+    setShowNotesModal(false)
+    setSelectedBatchItemForNotes(null)
+  }
+
+  // Función para cargar las notas de todos los batch items
+  const loadBatchItemsNotes = async () => {
+    try {
+      const response = await getNotes({
+        type: 'BATCH_ITEM_NOTE'
+      });
+
+      if (response.success) {
+        const itemsWithNotes = new Set<string>();
+        response.data.forEach(note => {
+          // Extraer el batch item ID del contenido de la nota
+          const match = note.content.match(/\[batch_item_([^\]]+)\]/);
+          if (match) {
+            itemsWithNotes.add(match[1]);
+          }
+        });
+        setBatchItemsWithNotes(itemsWithNotes);
+      }
+    } catch (error) {
+      console.error('Error cargando notas:', error);
+    }
+  };
 
   const getSalidas = async () => {
     setLoading(true)
@@ -103,7 +145,20 @@ const page = () => {
   useEffect(() => {
     getSalidas()
   }, [])
-  
+
+  // Cargar notas cuando se monta el componente
+  useEffect(() => {
+    loadBatchItemsNotes()
+  }, [])
+
+  // Recarga automática cuando se crea un pedido o salida
+  useEffect(() => {
+    if (shouldUpdateBitacora) {
+      getSalidas().then(() => markUpdated('bitacora'))
+      loadBatchItemsNotes() // También recargar notas
+    }
+  }, [shouldUpdateBitacora, markUpdated])
+
   const handleAssignSubmit = async () => {
     if (!selectedOrderItem || !assignQuantity || !selectedBatchItem) {
       alert('Por favor complete todos los campos')
@@ -122,7 +177,7 @@ const page = () => {
         orderItemId: selectedOrderItem.id,
         quantity: quantity
       })
-      
+
       if (result.success) {
         alert('Salida asignada al pedido exitosamente')
         setShowAssignModal(false)
@@ -149,11 +204,12 @@ const page = () => {
         container.batchItems?.forEach((item: BatchItem) => {
           const fecha = new Date(batch.createdAt)
           tableRows.push({
-            folio: `FOL-${batch.id.slice(-8).toUpperCase()}`,
+            // folio: `FOL-${batch.id.slice(-8).toUpperCase()}`,
+            folio: batch.batchNumber,
             area: item.product.area.name,
             clave: item.product.code,
-            pedido: container.containerCode,
-            lote: batch.batchNumber,
+            pedido: item?.orderItem?.order?.orderNumber,
+            lote: batch.name,
             fecha: fecha.toLocaleDateString('es-ES'),
             hora: fecha.toLocaleTimeString('es-ES', {
               hour: '2-digit',
@@ -162,7 +218,8 @@ const page = () => {
             }),
             cantidad: item.quantity,
             id: item.id,
-            productId: item.product.id
+            productId: item.product.id,
+            batchItem: item // Guardar referencia al batch item completo
           })
         })
       })
@@ -232,7 +289,7 @@ const page = () => {
       className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'}`}
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      
+
     >
       <td className="px-6 py-4 text-sm text-left">{row.folio}</td>
       <td className="px-6 py-4 text-sm text-left">{row.area}</td>
@@ -248,15 +305,16 @@ const page = () => {
             whileHover={{ scale: 1.2, rotate: 5 }}
             whileTap={{ scale: 0.9 }}
             transition={{ duration: 0.2 }}
+            onClick={() => handleOpenNotes(row.batchItem)}
           >
-            <FaFile className="text-yellow-500 cursor-pointer" title="Agregar nota" />
+            <FaStickyNote className={`cursor-pointer ${batchItemsWithNotes.has(row.id) ? 'text-yellow-500' : 'text-gray-400'}`} title={batchItemsWithNotes.has(row.id) ? 'Ver/Editar Nota' : 'Agregar Nota'} />
           </motion.div>
           <motion.div
             whileHover={{ scale: 1.2, rotate: 5 }}
             whileTap={{ scale: 0.9 }}
             transition={{ duration: 0.2 }}
           >
-            <FaPen className="text-blue-500 cursor-pointer" title="Editar" />
+                                            <FaEdit className="text-blue-500 cursor-pointer" title="Editar" />
           </motion.div>
           <motion.div
             whileHover={{ scale: 1.2, rotate: 5 }}
@@ -434,7 +492,7 @@ const page = () => {
             <h2 className="text-xl font-bold mb-4 text-[#2A3182]">
               Asignar Salida a Pedido
             </h2>
-            
+
             {selectedBatchItem && (
               <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                 <h3 className="font-semibold mb-2">Información de la Salida:</h3>
@@ -510,6 +568,17 @@ const page = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Notas */}
+      <NotesModal
+        isOpen={showNotesModal}
+        onClose={handleCloseNotes}
+        batchItem={selectedBatchItemForNotes}
+        onNoteAdded={() => {
+          // Recargar notas para actualizar el estado de los iconos
+          loadBatchItemsNotes()
+        }}
+      />
     </motion.div>
   )
 }

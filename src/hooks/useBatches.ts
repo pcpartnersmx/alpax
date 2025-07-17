@@ -2,30 +2,51 @@ import { useState } from 'react';
 
 export interface BatchItem {
     productId: string;
+    productCode: string;
+    productName: string;
+    lotNumber: string; // Número de lote específico para este producto
     quantity: number;
+    containers: string[];
 }
 
 export interface CreateBatchRequest {
-    batchNumber: string;
     name: string;
     description?: string;
-    items: BatchItem[];
-    containers?: string[];
+    items: BatchItem[]; // Cada item es un lote completo
 }
 
 export interface CreateBatchResponse {
     success: boolean;
     data?: {
-        id: string;
-        batchNumber: string;
-        name: string;
-        description?: string;
-        status: string;
-        createdAt: string;
-        updatedAt: string;
-        containers: any[];
-        batchItems: any[];
-        assignments?: Array<{
+        batchNumber: string; // Folio de la salida
+        batches: Array<{
+            id: string;
+            batchNumber: string;
+            name: string;
+            description?: string;
+            status: string;
+            createdAt: string;
+            updatedAt: string;
+            containers: any[];
+            batchItems: any[];
+            assignments?: Array<{
+                batchItemId: string;
+                productName: string;
+                totalQuantity: number;
+                assignedQuantity: number;
+                remainingQuantity: number;
+                assignments: Array<{
+                    orderNumber: string;
+                    orderItemId: string;
+                    assignedQuantity: number;
+                    pendingBefore: number;
+                    pendingAfter: number;
+                }>;
+                error?: string;
+            }>;
+        }>;
+        totalBatches: number;
+        assignments: Array<{
             batchItemId: string;
             productName: string;
             totalQuantity: number;

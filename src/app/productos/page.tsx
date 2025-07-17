@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 import Table from '../components/Essentials/Table';
 import Input from '../components/Essentials/Input';
-import { FaSearch, FaPen, FaTrash, FaPlus, FaFile } from 'react-icons/fa';
+import { FaSearch, FaEdit, FaTrash, FaPlus, FaStickyNote } from 'react-icons/fa';
 import Modal from '../components/Essentials/Modal';
 import { Combobox } from '../components/ui/combobox';
 
@@ -371,14 +371,14 @@ export default function ProductosPage() {
                             whileTap={{ scale: 0.9 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <FaFile className="text-yellow-500 cursor-pointer" title="Agregar nota" />
+                                                            <FaStickyNote className="text-yellow-500 cursor-pointer" title="Agregar nota" />
                           </motion.div>
                           <motion.div
                             whileHover={{ scale: 1.2, rotate: 5 }}
                             whileTap={{ scale: 0.9 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <FaPen className="text-blue-500 cursor-pointer" title="Editar" />
+                                                            <FaEdit className="text-blue-500 cursor-pointer" title="Editar" />
                           </motion.div>
                           <motion.div
                             whileHover={{ scale: 1.2, rotate: 5 }}

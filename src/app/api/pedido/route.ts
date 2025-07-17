@@ -137,6 +137,8 @@ export async function POST(request: NextRequest) {
                 ...newOrder,
                 orderItems: createdItems
             };
+        }, {
+            timeout: 10000 // Aumentar el timeout a 10 segundos
         });
 
         return NextResponse.json({

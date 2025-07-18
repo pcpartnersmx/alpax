@@ -9,6 +9,7 @@ export interface Product {
     description?: string;
     createdAt: string;
     updatedAt: string;
+    quantity: number;
 }
 
 export interface GetProductsResponse {

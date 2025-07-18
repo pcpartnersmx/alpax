@@ -14,163 +14,162 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  password      String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  orders        Order[]
-  notes         Note[]
-  logs          Log[]
+  orders Order[]
+  notes  Note[]
+  logs   Log[]
 }
 
 model Area {
-  id            String    @id @default(cuid())
-  name          String    @unique
-  description   String?
-  status        AreaStatus @default(ACTIVE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  status      AreaStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
   // Relations
-  products      Product[]
-  logs          Log[]
+  products Product[]
+  logs     Log[]
 }
 
 model Product {
-  id            String    @id @default(cuid())
-  name          String
-  code          String    @unique
-  description   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relations
-  areaId        String?
-  area          Area?     @relation(fields: [areaId], references: [id], onDelete: Cascade)
-  orderItems    OrderItem[]
-  batchItems    BatchItem[]
-  logs          Log[]
+  id          String      @id @default(cuid())
+  name        String
+  code        String      @unique
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  quantity    Int         @default(1)
+  areaId      String?
+  area        Area?       @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+  batchItems  BatchItem[]
+  logs        Log[]
 }
 
 model Order {
-  id            String    @id @default(cuid())
-  orderNumber   String    @unique
-  type          OrderType
-  status        OrderStatus @default(PENDING)
-  totalAmount   Decimal   @db.Decimal(10, 2)
-  orderNotes    String?
-  pdfUrl        String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id          String      @id @default(cuid())
+  orderNumber String      @unique
+  type        OrderType
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(10, 2)
+  orderNotes  String?
+  pdfUrl      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
   // Relations
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orderItems    OrderItem[]
-  notes         Note[]
-  logs          Log[]
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  notes      Note[]
+  logs       Log[]
 }
 
 model OrderItem {
-  id            String    @id @default(cuid())
-  quantity      Int
-  unitPrice     Decimal   @db.Decimal(10, 2)
-  totalPrice    Decimal   @db.Decimal(10, 2)
-  completedQuantity Int   @default(0) // Cantidad completada del pedido
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id                String   @id @default(cuid())
+  quantity          Int
+  unitPrice         Decimal  @db.Decimal(10, 2)
+  totalPrice        Decimal  @db.Decimal(10, 2)
+  completedQuantity Int      @default(0) // Cantidad completada del pedido
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
   // Relations
-  orderId       String
-  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId     String
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  batchItems    BatchItem[] // Relación con las salidas que llenan este item
+  orderId    String
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchItems BatchItem[] // Relación con las salidas que llenan este item
 }
 
 model Batch {
-  id            String    @id @default(cuid())
-  batchNumber   String    
-  name          String
-  description   String?
-  status        BatchStatus @default(ACTIVE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id          String      @id @default(cuid())
+  batchNumber String
+  name        String
+  description String?
+  status      BatchStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
   // Relations
-  containers    Container[]
-  logs          Log[]
+  containers Container[]
+  logs       Log[]
 }
 
 model Container {
-  id            String    @id @default(cuid())
-  containerCode String    @unique
+  id            String          @id @default(cuid())
+  containerCode String          @unique
   name          String
   description   String?
   status        ContainerStatus @default(ACTIVE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
   // Relations
-  batchId       String
-  batch         Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  batchItems    BatchItem[]
+  batchId    String
+  batch      Batch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchItems BatchItem[]
 }
 
 model BatchItem {
-  id            String    @id @default(cuid())
-  quantity      Int
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id        String   @id @default(cuid())
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  containerId   String
-  container     Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
-  productId     String
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItemId   String?   // Relación opcional con el item del pedido que se está llenando
-  orderItem     OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
-  notes         Note[]    // Notas asociadas a este batch item
+  containerId String
+  container   Container  @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItemId String? // Relación opcional con el item del pedido que se está llenando
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  notes       Note[] // Notas asociadas a este batch item
 }
 
 model Note {
-  id            String    @id @default(cuid())
-  content       String
-  type          NoteType
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id        String   @id @default(cuid())
+  content   String
+  type      NoteType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orderId       String?
-  order         Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  batchItemId   String?
-  batchItem     BatchItem? @relation(fields: [batchItemId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  batchItemId String?
+  batchItem   BatchItem? @relation(fields: [batchItemId], references: [id], onDelete: Cascade)
 }
 
 model Log {
-  id            String    @id @default(cuid())
-  action        String
-  description   String
-  quantity      Int?
-  createdAt     DateTime  @default(now())
-  
+  id          String   @id @default(cuid())
+  action      String
+  description String
+  quantity    Int?
+  createdAt   DateTime @default(now())
+
   // Relations
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  productId     String?
-  product       Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
-  orderId       String?
-  order         Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  batchId       String?
-  batch         Batch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  areaId        String?
-  area          Area?     @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  batchId   String?
+  batch     Batch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  areaId    String?
+  area      Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
 }
 
 // Enums

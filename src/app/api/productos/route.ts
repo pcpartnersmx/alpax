@@ -56,11 +56,24 @@ export async function POST(request: NextRequest) {
             }
         });
 
+        // Transformar el producto para compatibilidad con el frontend
+        const transformedProduct = {
+            id: newProduct.id,
+            name: newProduct.name,
+            code: newProduct.code,
+            area: newProduct.area?.name,
+            areaId: newProduct.areaId,
+            description: newProduct.description,
+            quantity: newProduct.quantity, // <-- AÑADIDO
+            createdAt: newProduct.createdAt,
+            updatedAt: newProduct.updatedAt
+        };
+
         return NextResponse.json(
             {
                 success: true,
                 message: 'Producto creado exitosamente',
-                data: newProduct
+                data: transformedProduct
             },
             { status: 201 }
         );
@@ -111,7 +124,8 @@ export async function GET(request: NextRequest) {
                 area: {
                     select: {
                         id: true,
-                        name: true
+                        name: true,
+                        
                     }
                 }
             }
@@ -125,6 +139,7 @@ export async function GET(request: NextRequest) {
             area: product?.area?.name, // Mantener el nombre del área para compatibilidad
             areaId: product.areaId,
             description: product.description,
+            quantity: product.quantity, // <-- AÑADIDO
             createdAt: product.createdAt,
             updatedAt: product.updatedAt
         }));

@@ -102,6 +102,7 @@ export default function ResumenPage() {
     const [editCode, setEditCode] = useState('')
     const [editAreaId, setEditAreaId] = useState('')
     const [editDescription, setEditDescription] = useState('')
+    const [editQuantity, setEditQuantity] = useState<number>(0)
 
     // Fetch products and all orders on component mount
     useEffect(() => {
@@ -366,6 +367,8 @@ export default function ResumenPage() {
         setEditCode(product.code)
         setEditAreaId(areas.find(area => area.name === product.area)?.id || '')
         setEditDescription(product.description || '')
+        setEditQuantity(product.quantity || 0)
+        console.log('Abriendo modal de edición. Cantidad inicial:', product.quantity)
         setShowEditModal(true)
     }
 
@@ -376,11 +379,20 @@ export default function ResumenPage() {
         setEditCode('')
         setEditAreaId('')
         setEditDescription('')
+        setEditQuantity(0)
     }
 
     const handleEditSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!editProduct) return
+
+        console.log('Enviando datos al backend:', {
+            name: editName,
+            code: editCode,
+            areaId: editAreaId,
+            description: editDescription,
+            quantity: editQuantity
+        })
 
         try {
             const response = await fetch(`/api/productos/${editProduct.id}`, {
@@ -392,7 +404,8 @@ export default function ResumenPage() {
                     name: editName,
                     code: editCode,
                     areaId: editAreaId,
-                    description: editDescription
+                    description: editDescription,
+                    quantity: editQuantity
                 }),
             })
 
@@ -572,35 +585,40 @@ export default function ResumenPage() {
                                             <th className="py-2 px-4 text-left font-bold">CÓDIGO</th>
                                             <th className="py-2 px-4 text-left font-bold">NOMBRE</th>
                                             <th className="py-2 px-4 text-left font-bold">ÁREA</th>
-                                            <th className="py-2 px-4 text-left font-bold">ACCION</th>
+                                            <th className="py-2 px-4 font-bold text-right">CANTIDAD</th>
+                                            <th className="py-2 px-4 font-bold text-center">ACCION</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredProducts.map((product, i) => (
-                                            <motion.tr
-                                                key={product.id}
-                                                className={`cursor-pointer hover:bg-[#E6E5B6] transition-colors ${selectedProduct?.id === product.id ? 'bg-[#E6E5B6]' :
-                                                    i % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'
-                                                    }`}
-                                                onClick={() => handleProductClick(product)}
-                                                initial={{ opacity: 0, x: -20 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: 0.6 + (i * 0.05) }}
-                                                whileHover={{ scale: 1.01 }}
-                                            >
-                                                <td className="py-2 px-4 align-middle font-medium">{product.code}</td>
-                                                <td className="py-2 px-4 align-middle">{product.name}</td>
-                                                <td className="py-2 px-4 align-middle">{product.area}</td>
-                                                <td className="py-2 px-4 align-middle">
-                                                    <button 
-                                                        className="text-blue-500 hover:text-blue-700"
-                                                        onClick={(e) => handleEditProduct(product, e)}
-                                                    >
-                                                        <FaEdit />
-                                                    </button>
-                                                </td>
-                                            </motion.tr>
-                                        ))}
+                                        {filteredProducts
+                                            .slice() // Copia para no mutar el estado
+                                            .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+                                            .map((product, i) => (
+                                                <motion.tr
+                                                    key={product.id}
+                                                    className={`cursor-pointer hover:bg-[#E6E5B6] transition-colors ${selectedProduct?.id === product.id ? 'bg-[#E6E5B6]' :
+                                                        i % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'
+                                                        }`}
+                                                    onClick={() => handleProductClick(product)}
+                                                    initial={{ opacity: 0, x: -20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    transition={{ delay: 0.6 + (i * 0.05) }}
+                                                    whileHover={{ scale: 1.01 }}
+                                                >
+                                                    <td className="py-2 px-4 align-middle font-medium">{product.code}</td>
+                                                    <td className="py-2 px-4 align-middle">{product.name}</td>
+                                                    <td className="py-2 px-4 align-middle">{product.area}</td>
+                                                    <td className="py-2 px-4 align-middle text-right">{product.quantity}</td>
+                                                    <td className="py-2 px-4 align-middle text-center">
+                                                        <button 
+                                                            className="text-blue-500 hover:text-blue-700"
+                                                            onClick={(e) => handleEditProduct(product, e)}
+                                                        >
+                                                            <FaEdit />
+                                                        </button>
+                                                    </td>
+                                                </motion.tr>
+                                            ))}
                                     </tbody>
                                 </table>
                             </motion.div>
@@ -1007,6 +1025,26 @@ export default function ResumenPage() {
                                         placeholder="Código"
                                         value={editCode}
                                         onChange={e => setEditCode(e.target.value)}
+                                        required
+                                    />
+                                </motion.div>
+                                <motion.div
+                                    className="mb-4"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.55 }}
+                                >
+                                    <label className="block text-gray-700 font-semibold mb-1">Cantidad</label>
+                                    <input
+                                        className="w-full px-3 py-2 border rounded bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#2A3182] focus:border-transparent"
+                                        type="number"
+                                        min={0}
+                                        placeholder="Cantidad"
+                                        value={editQuantity}
+                                        onChange={e => {
+                                            setEditQuantity(Number(e.target.value))
+                                            console.log('Cantidad editada:', Number(e.target.value))
+                                        }}
                                         required
                                     />
                                 </motion.div>

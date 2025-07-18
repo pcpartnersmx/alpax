@@ -70,7 +70,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, code, areaId, description } = body;
+    const { name, code, areaId, description, quantity } = body;
 
     // Validación de campos requeridos
     if (!name || !code || !areaId) {
@@ -139,7 +139,8 @@ export async function PUT(
         name,
         code,
         areaId,
-        description: description || null
+        description: description || null,
+        ...(typeof quantity === 'number' ? { quantity } : {})
       },
       include: {
         area: {

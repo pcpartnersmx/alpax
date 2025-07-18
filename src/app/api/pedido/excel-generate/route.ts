@@ -85,13 +85,13 @@ export async function POST(request: NextRequest) {
 
         // Agregar datos de productos
         products.forEach(product => {
-            const productRow = [product.name, product.area.name];
+            const productRow = [product.name, product.area?.name || 'Sin área'];
             
             // Para cada pedido, buscar la cantidad de este producto
             orders.forEach(order => {
                 const orderItem = order.orderItems.find(item => item.productId === product.id);
                 const quantity = orderItem ? orderItem.quantity : 0;
-                productRow.push(quantity);
+                productRow.push(quantity.toString());
             });
             
             const row = worksheet.addRow(productRow);
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
         // Calcular totales por pedido
         orders.forEach(order => {
             const totalQuantity = order.orderItems.reduce((total, item) => total + item.quantity, 0);
-            totalRow.push(totalQuantity);
+            totalRow.push(totalQuantity.toString());
         });
         
         const totalRowData = worksheet.addRow(totalRow);

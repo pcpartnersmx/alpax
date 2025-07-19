@@ -8,7 +8,7 @@ import { useOrders } from '@/hooks/useOrders'
 import { useUpdate } from '@/contexts/UpdateContext'
 import { Product } from '@/hooks/useProducts'
 import { Order } from '@/types/pedido'
-import { FaBoxOpen, FaEdit, FaPlus, FaSearch } from 'react-icons/fa'
+import { FaBoxOpen, FaDownload, FaEdit, FaFileExcel, FaFilePdf, FaPlus, FaSearch, FaTimes } from 'react-icons/fa'
 import Modal from '../components/Essentials/Modal'
 
 interface Area {
@@ -162,10 +162,18 @@ export default function ResumenPage() {
                         setFilteredProducts(productsResponse.data)
                     }
 
-                    // Fetch all orders (without product filter)
+                    // Fetch all orders and filter by selected product if any
                     const ordersResponse = await getOrders({})
                     if (ordersResponse.success) {
-                        setOrders(ordersResponse.data)
+                        if (selectedProduct) {
+                            // Filter orders to only include those that contain the selected product
+                            const filteredOrders = ordersResponse.data.filter(order => 
+                                order.orderItems.some(item => item.productId === selectedProduct.id)
+                            )
+                            setOrders(filteredOrders)
+                        } else {
+                            setOrders(ordersResponse.data)
+                        }
                     }
 
                     // Fetch areas
@@ -186,7 +194,7 @@ export default function ResumenPage() {
 
             fetchData()
         }
-    }, [shouldUpdateResumen, markUpdated])
+    }, [shouldUpdateResumen, markUpdated, selectedProduct])
 
     // Filter products based on search term
     useEffect(() => {
@@ -212,9 +220,14 @@ export default function ResumenPage() {
         setLoading(true)
 
         try {
-            const response = await getOrders({ productId: product.id })
+            // Fetch all orders and filter by the selected product
+            const response = await getOrders({})
             if (response.success) {
-                setOrders(response.data)
+                // Filter orders to only include those that contain the selected product
+                const filteredOrders = response.data.filter(order => 
+                    order.orderItems.some(item => item.productId === product.id)
+                )
+                setOrders(filteredOrders)
             } else {
                 console.error('Error fetching orders:', response.error)
                 setOrders([])
@@ -280,7 +293,7 @@ export default function ResumenPage() {
                 link.click()
                 document.body.removeChild(link)
                 window.URL.revokeObjectURL(url)
-                
+
                 toast.success('Excel descargado exitosamente')
             } else {
                 // Try to get error message from response
@@ -296,6 +309,63 @@ export default function ResumenPage() {
         } catch (error) {
             console.error('Error downloading Excel:', error)
             toast.error('Error al descargar el Excel')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDownloadProductExcel = async () => {
+        if (!selectedProduct) return
+
+        try {
+            setLoading(true)
+
+            // Create Excel content for specific product
+            const excelContent = {
+                generatedAt: new Date().toLocaleString('es-ES'),
+                productId: selectedProduct.id,
+                productCode: selectedProduct.code,
+                productName: selectedProduct.name
+            }
+
+            // Call the Excel generation API with product filter
+            const response = await fetch('/api/pedido/excel-generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(excelContent)
+            })
+
+            if (response.ok) {
+                // Get the Excel blob
+                const blob = await response.blob()
+
+                // Create download link
+                const url = window.URL.createObjectURL(blob)
+                const link = document.createElement('a')
+                link.href = url
+                link.download = `pedidos-${selectedProduct.code}-${new Date().toISOString().split('T')[0]}.xlsx`
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+                window.URL.revokeObjectURL(url)
+
+                toast.success(`Excel de ${selectedProduct.name} descargado exitosamente`)
+            } else {
+                // Try to get error message from response
+                let errorMessage = 'Error al generar el Excel'
+                try {
+                    const errorData = await response.json()
+                    errorMessage = errorData.error || errorMessage
+                } catch {
+                    // If response is not JSON, use default message
+                }
+                toast.error(errorMessage)
+            }
+        } catch (error) {
+            console.error('Error downloading product Excel:', error)
+            toast.error('Error al descargar el Excel del producto')
         } finally {
             setLoading(false)
         }
@@ -468,7 +538,7 @@ export default function ResumenPage() {
 
     return (
         <motion.div
-            className="min-h-screen bg-[#F4F4F7] flex items-start justify-center px-2"
+            className="min-h-screen bg-[#F4F4F7] flex items-start justify-center px-2 !pt-20"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
@@ -532,7 +602,7 @@ export default function ResumenPage() {
 
                         {/* Search Bar */}
                         <motion.div
-                            className="mb-6"
+                            className="mb-4"
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4 }}
@@ -553,9 +623,7 @@ export default function ResumenPage() {
                                         onClick={() => setSearchTerm('')}
                                         className="absolute inset-y-0 right-0 flex items-center"
                                     >
-                                        <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        <FaTimes size={20} className='pr-3 text-gray-400 hover:text-gray-600' />
                                     </button>
                                 )}
                             </div>
@@ -600,17 +668,13 @@ export default function ResumenPage() {
                                                         i % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'
                                                         }`}
                                                     onClick={() => handleProductClick(product)}
-                                                    initial={{ opacity: 0, x: -20 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    transition={{ delay: 0.6 + (i * 0.05) }}
-                                                    whileHover={{ scale: 1.01 }}
                                                 >
                                                     <td className="py-2 px-4 align-middle font-medium">{product.code}</td>
                                                     <td className="py-2 px-4 align-middle">{product.name}</td>
                                                     <td className="py-2 px-4 align-middle">{product.area}</td>
                                                     <td className="py-2 px-4 align-middle text-right">{product.quantity}</td>
                                                     <td className="py-2 px-4 align-middle text-center">
-                                                        <button 
+                                                        <button
                                                             className="text-blue-500 hover:text-blue-700"
                                                             onClick={(e) => handleEditProduct(product, e)}
                                                         >
@@ -638,7 +702,7 @@ export default function ResumenPage() {
 
                     {/* Columna pedidos - STICKY */}
                     <motion.div
-                        className="w-[480px] min-w-[350px] bg-white p-8 rounded-lg sticky top-20 self-start"
+                        className="w-[600px] min-w-[350px] bg-white p-8 rounded-lg sticky top-28 self-start"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5, delay: 0.4 }}
@@ -649,19 +713,38 @@ export default function ResumenPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4, delay: 0.5 }}
                         >
-                            <h2 className="text-xl font-bold text-[#2A3182] mb-2">
-                                Pedidos {selectedProduct ? `- ${selectedProduct.name}` : ''}
-                            </h2>
-                            {selectedProduct && (
-                                <motion.p
-                                    className="text-sm text-gray-600 mb-4"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.6 }}
-                                >
-                                    Mostrando pedidos que contienen el producto: <strong>{selectedProduct.code}</strong>
-                                </motion.p>
-                            )}
+
+                            <div className='flex justify-between items-center'>
+
+                                <div className='flex flex-col'>
+                                    <h2 className="text-xl font-bold text-[#2A3182]">
+                                        {selectedProduct?.code}
+                                    </h2>
+                                    {selectedProduct && (
+                                        <motion.p
+                                            className="text-sm text-gray-600"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ delay: 0.6 }}
+                                        >
+                                            {selectedProduct.name}
+                                        </motion.p>
+                                    )}
+                                </div>
+                                {selectedProduct &&
+                                    <motion.button
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ duration: 0.4 }}
+                                        className='bg-[#2A3182] font-semibold text-white px-4 py-2 rounded-md flex items-center gap-2'
+                                        onClick={handleDownloadProductExcel}
+                                        disabled={loading}>
+                                        <DownloadIcon />
+                                        Descargar
+                                    </motion.button>
+                                }
+                            </div>
+
                         </motion.div>
 
                         {selectedProduct === null ? (
@@ -687,9 +770,9 @@ export default function ResumenPage() {
                                     <table className="min-w-full text-base">
                                         <thead>
                                             <tr className="bg-[#8B8B8B] text-white">
-                                                <th className="py-2 px-4 text-left font-bold">NÚMERO</th>
-                                                <th className="py-2 px-4 text-left font-bold">ESTADO</th>
-                                                <th className="py-2 px-4 text-left font-bold">CANTIDAD</th>
+                                                <th className="py-2 px-4 text-left font-bold">PEDIDO</th>
+                                                <th className="py-2 px-4 text-center font-bold">ESTADO</th>
+                                                <th className="py-2 px-4 text-center font-bold">CANTIDAD</th>
                                                 <th className="py-2 px-4 text-left font-bold">FECHA</th>
                                             </tr>
                                         </thead>
@@ -703,13 +786,9 @@ export default function ResumenPage() {
                                                     <motion.tr
                                                         key={order.id}
                                                         className={i % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'}
-                                                        initial={{ opacity: 0, x: -20 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                        transition={{ delay: 0.8 + (i * 0.05) }}
-                                                        whileHover={{ scale: 1.01 }}
                                                     >
                                                         <td className="py-2 px-4 align-middle font-medium">{order.orderNumber}</td>
-                                                        <td className="py-2 px-4 align-middle">
+                                                        <td className="py-2 px-4 align-middle text-center">
                                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                                                                 order.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
                                                                     order.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
@@ -721,7 +800,7 @@ export default function ResumenPage() {
                                                                             'CANCELADO'}
                                                             </span>
                                                         </td>
-                                                        <td className="py-2 px-4 align-middle">
+                                                        <td className="py-2 px-4 align-middle text-center">
                                                             {selectedProduct
                                                                 ? (productItem?.quantity || 0)
                                                                 : order.orderItems.reduce((total, item) => total + item.quantity, 0)

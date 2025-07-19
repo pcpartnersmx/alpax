@@ -590,16 +590,15 @@ const Navbar = () => {
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm p-4 flex items-center justify-between">
                 {/* Logo */}
                 <div className='flex gap-12 pl-4'>
-                    <div className="flex items-center gap-2 min-w-[120px]">
+                    <Link href="/" className="flex items-center gap-2 min-w-[120px]">
                         <img src="/favicon.jpeg" alt="logo" className="w-10 h-10" />
-                    </div>
+                    </Link>
                     {/* Menú */}
-                    <div className="flex gap-8">
-                        <Link href="/" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Bitácora</Link>
-                        <Link href="/salidas" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/salidas') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Salidas</Link>
-                        <Link href="/pedidos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/pedidos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Pedidos</Link>
-                        <Link href="/resumen" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/resumen' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Productos</Link>
-                        {/* <Link href="/productos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/productos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Productos</Link> */}
+                    <div className="flex gap-8 items-center">
+                        <Link href="/" className={`text-[#2A3182] text-xl hover:border-b-3 border-[#2A3182] !h-[30px] font-medium ${pathname === '/' ? 'border-b-3 border-[#2A3182] font-semibold' : ''}`}>Bitácora</Link>
+                        <Link href="/salidas" className={`text-[#2A3182] text-xl hover:border-b-3 border-[#2A3182] !h-[30px] font-medium ${pathname.startsWith('/salidas') ? 'border-b-3 border-[#2A3182] font-semibold' : ''}`}>Salidas</Link>
+                        <Link href="/pedidos" className={`text-[#2A3182] text-xl hover:border-b-3 border-[#2A3182] !h-[30px] font-medium ${pathname.startsWith('/pedidos') ? 'border-b-3 border-[#2A3182] font-semibold' : ''}`}>Pedidos</Link>
+                        <Link href="/resumen" className={`text-[#2A3182] text-xl hover:border-b-3 border-[#2A3182] !h-[30px] font-medium ${pathname === '/resumen' ? 'border-b-3 border-[#2A3182] font-semibold' : ''}`}>Productos</Link>
                     </div>
                 </div>
                 {/* Botones y avatar */}

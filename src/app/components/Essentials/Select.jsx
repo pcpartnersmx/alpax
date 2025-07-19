@@ -27,7 +27,7 @@ export default function Select({
     };
 
     return (
-        <div className="text-start">
+        <div className="text-start pr-2 rounded-md p-1  border-2 border-[#2a3182]">
             {label && (
                 <label
                     htmlFor={id}
@@ -41,7 +41,8 @@ export default function Select({
                 id={id}
                 onChange={handleChange}
                 value={selectedValue}
-                className={`w-full px-4 py-2 text-base rounded-lg focus:outline-none text-start ${!className ? 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow border border-gray-200' : className} ${disabled ? ' shadow-md bg-[#f3f4f6] border-gray-300' : ''}`}
+                className='w-full outline-none'
+                // className={`w-full px-4 pr-5 py-2 text-base rounded-lg focus:outline-none text-start ${!className ? 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow border border-gray-200' : className} ${disabled ? ' shadow-md bg-[#f3f4f6] border-gray-300' : ''}`}
                 required={required}
                 disabled={disabled}
             >

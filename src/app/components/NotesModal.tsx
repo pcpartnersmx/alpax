@@ -114,13 +114,11 @@ const NotesModal: React.FC<NotesModalProps> = ({
         <div className="w-full max-h-[70vh] overflow-y-auto">
             {/* Nueva nota */}
             <div className="mb-6">
-                <h3 className="font-semibold mb-3 text-[#2A3182]">Agregar Nueva Nota:</h3
-                >
                 <div className='flex flex-col gap-2'>
                     <textarea
                         value={newNote}
                         onChange={(e) => setNewNote(e.target.value)}
-                        placeholder="Escribe tu nota aquí..."
+                        placeholder="Nueva nota ..."
                         className="flex-1 p-3 border h-24 border-gray-300 rounded-lg resize-none"
                         rows={3}
                     />
@@ -128,17 +126,15 @@ const NotesModal: React.FC<NotesModalProps> = ({
                         <button
                             onClick={handleSaveNote}
                             disabled={!newNote.trim() || saving}
-                            className="px-4 w-[20%] justify-center h-12 mt-auto bg-[#2A3182] text-white rounded-lg hover:bg-[#1a1f5a] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-4 w-[30%] justify-center h-9 mt-auto bg-[#2A3182] text-white rounded-lg hover:bg-[#1a1f5a] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {saving ? (
                                 <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                     Guardando...
                                 </>
                             ) : (
                                 <>
-                                    <FaSave size={20} />
-                                    Guardar
+                                    Agregar
                                 </>
                             )}
                         </button>
@@ -186,7 +182,7 @@ const NotesModal: React.FC<NotesModalProps> = ({
                     </div>
                 ) : (
                     <div className="text-center py-8 text-gray-500">
-                        <p>No hay notas para este item</p>
+                        <p>No hay notas disponibles</p>
                     </div>
                 )}
             </div>
@@ -195,12 +191,13 @@ const NotesModal: React.FC<NotesModalProps> = ({
 
     return (
         <Modal
-            title={`Notas - ${batchItem?.product?.name || 'Item'}`}
+            title={`Notas`}
+            classNameTitle='pb-2 text-start'
+            className='!py-5 w-[25%]'
             message=""
+            classNameMessage='hidden'
             body={modalBody}
             onClose={onClose}
-            size="md"
-            // className="max-w-4xl"
         />
     );
 };

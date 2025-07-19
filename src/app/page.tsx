@@ -322,7 +322,35 @@ const page = () => {
       })
     })
 
-    return tableRows
+    // Ordenar primero por fecha de creación descendente, luego por número de pedido dentro del mismo folio
+    return tableRows.sort((a, b) => {
+      // Primero ordenar por fecha de creación del batch (más recientes primero)
+      const fechaA = new Date(a.batch.createdAt)
+      const fechaB = new Date(b.batch.createdAt)
+      const fechaComparison = fechaB.getTime() - fechaA.getTime()
+      
+      if (fechaComparison !== 0) {
+        return fechaComparison
+      }
+      
+      // Si es el mismo folio, ordenar por número de pedido descendente
+      if (a.folio === b.folio) {
+        // Si ambos tienen pedido asignado, ordenar por número de pedido
+        if (a.pedido !== 'Sin asignar' && b.pedido !== 'Sin asignar') {
+          return b.pedido.localeCompare(a.pedido)
+        }
+        // Si solo uno tiene pedido asignado, poner el que tiene pedido primero
+        if (a.pedido !== 'Sin asignar' && b.pedido === 'Sin asignar') {
+          return -1
+        }
+        if (a.pedido === 'Sin asignar' && b.pedido !== 'Sin asignar') {
+          return 1
+        }
+      }
+      
+      // Si ambos son "Sin asignar" o diferentes folios, mantener el orden original
+      return 0
+    })
   }
 
   // Aplicar filtros
@@ -369,35 +397,33 @@ const page = () => {
   }, [salidas, searchTerm, filtroFecha, filtroClave, filtroPedido, filtroLote])
 
   const columns = [
-    { key: 'folio', title: 'FOLIO', width: 'w-24' },
-    { key: 'area', title: 'AREA', width: 'w-20' },
-    { key: 'clave', title: 'CLAVE', width: 'w-16' },
-    { key: 'pedido', title: 'PEDIDO', width: 'w-20' },
-    { key: 'lote', title: 'LOTE', width: 'w-16' },
-    { key: 'fecha', title: 'FECHA', width: 'w-20' },
-    { key: 'hora', title: 'HORA', width: 'w-16' },
-    { key: 'cantidad', title: 'CANT. ASIGNADA', width: 'w-24' },
-    { key: 'paquetesSalidos', title: 'PAQUETES SALIDOS', width: 'w-24' },
-    { key: 'otros', title: 'OTROS', width: 'w-20' }
+    { key: 'folio', title: 'FOLIO', width: 'w-[10%]' },
+    { key: 'area', title: 'AREA', width: 'w-[10%]' },
+    { key: 'clave', title: 'CLAVE', width: 'w-[10%]' },
+    { key: 'pedido', title: 'PEDIDO', width: 'w-[10%]' },
+    { key: 'lote', title: 'LOTE', width: 'w-[10%]' },
+    { key: 'fecha', title: 'FECHA', width: 'w-[10%]' },
+    { key: 'hora', title: 'HORA', width: 'w-[5%]' },
+    { key: 'cantidad', title: 'SURTIDO', width: 'w-[10%]' },
+    { key: 'otros', title: 'NOTAS', width: 'w-[10%]' }
   ]
 
   const tableBody = filteredData.map((row, index) => (
     <motion.tr
       key={index}
-      className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'}`}
+      className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-[#F4F4F7]'} hover:bg-[#dedee0]`}
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
     >
-      <td className="px-3 py-4 text-sm text-left">{row.folio}</td>
-      <td className="px-3 py-4 text-sm text-left">{row.area}</td>
-      <td className="px-3 py-4 text-sm text-left">{row.clave}</td>
-      <td className="px-3 py-4 text-sm text-left">{row.pedido || 'Sin asignar'}</td>
-      <td className="px-3 py-4 text-sm text-left">{row.lote}</td>
-      <td className="px-3 py-4 text-sm text-left">{row.fecha}</td>
-      <td className="px-3 py-4 text-sm text-left">{row.hora}</td>
-      <td className="px-3 py-4 text-sm text-right">{row.cantidad.toLocaleString()}</td>
-      <td className="px-3 py-4 text-sm text-right">{row.cantidadProducto > 0 ? Math.floor(row.cantidad / row.cantidadProducto).toLocaleString() : '-'}</td>
-      <td className="px-3 py-4 text-sm text-center">
+      <td className="px-3 py-3 text-sm text-left">{row.folio}</td>
+      <td className="px-3 py-3 text-sm text-left">{row.area}</td>
+      <td className="px-3 py-3 text-sm text-left">{row.clave}</td>
+      <td className="px-3 py-3 text-sm text-left">{row.pedido || 'Sin asignar'}</td>
+      <td className="px-3 py-3 text-sm text-left">{row.lote}</td>
+      <td className="px-3 py-3 text-sm text-left">{row.fecha}</td>
+      <td className="px-3 py-3 text-sm text-left">{row.hora}</td>
+      <td className="px-3 py-3 text-sm text-right">{row.cantidad.toLocaleString()}</td>
+      <td className="px-3 py-3 text-sm text-center">
         <div className="flex items-center space-x-2 justify-center">
           <motion.div
             whileHover={{ scale: 1.2, rotate: 5 }}
@@ -405,30 +431,8 @@ const page = () => {
             transition={{ duration: 0.2 }}
             onClick={() => handleOpenNotes(row.batchItem)}
           >
-            <FaStickyNote className={`cursor-pointer ${batchItemsWithNotes.has(row.id) ? 'text-yellow-500' : 'text-gray-400'}`} title={batchItemsWithNotes.has(row.id) ? 'Ver/Editar Nota' : 'Agregar Nota'} />
+            <FaStickyNote size={20} className={`cursor-pointer ${batchItemsWithNotes.has(row.id) ? 'text-yellow-500' : 'text-gray-400'}`} title={batchItemsWithNotes.has(row.id) ? 'Ver/Editar Nota' : 'Agregar Nota'} />
           </motion.div>
-          <motion.div
-            whileHover={{ scale: 1.2, rotate: 5 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-            onClick={() => handleDownloadPDF(row)}
-          >
-            <FaFilePdf className="text-red-500 cursor-pointer" title="Descargar PDF de la salida" />
-          </motion.div>
-          {/* <motion.div
-            whileHover={{ scale: 1.2, rotate: 5 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-          >
-            <FaEdit className="text-blue-500 cursor-pointer" title="Editar" />
-          </motion.div>
-          <motion.div
-            whileHover={{ scale: 1.2, rotate: 5 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-          >
-            <FaTrash className="text-red-500 cursor-pointer" title="Eliminar" />
-          </motion.div> */}
         </div>
       </td>
     </motion.tr>
@@ -442,27 +446,27 @@ const page = () => {
 
   return (
     <motion.div
-      className="min-h-screen bg-[#F4F4F7] flex items-start justify-center px-2"
+      className="min-h-screen pt-20 flex items-start justify-center px-2"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
       <div className="w-full p-8">
         <motion.div
-          className="bg-white p-8 rounded-lg"
+          className="bg-white p-8 pt-6 rounded-lg h-[83vh] overflow-y-auto"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
           {/* Barra superior con filtros y buscador */}
           <motion.div
-            className="flex justify-between items-center mb-6"
+            className="flex justify-between items-center mb-2"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.3 }}
           >
             {/* Filtros dropdown */}
-            <div className="flex space-x-4">
+            <div className="flex space-x-4 ">
               <div className='w-[150px]'>
                 <Select
                   options={fechasUnicas.map(fecha => ({ value: fecha, label: fecha }))}
@@ -534,7 +538,7 @@ const page = () => {
                 placeholder="Buscar"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border-[#2a3182] w-full border-2 rounded-lg outline-none text-black"
+                className="pl-10 pr-4 py-1 border-[#2a3182] w-full border-2 rounded-lg outline-none text-black"
               />
             </div>
           </motion.div>
@@ -564,13 +568,13 @@ const page = () => {
             </motion.div>
           ) : filteredData.length > 0 ? (
             <motion.div
-              className="rounded-[8px] overflow-hidden border border-[#E5E7EB]"
+              className="rounded-[8px] overflow-hidden border border-[#E5E7EB] max-h-[93.5%] overflow-y-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4, delay: 0.5 }}
             >
               <table className="min-w-full text-base table-fixed">
-                <thead>
+                <thead className="sticky top-0">
                   <tr className="bg-[#2A3182] text-white">
                     {columns.map((column, index) => (
                       <th key={index} className={`py-2 px-3 font-bold ${column.width} ${column.key === 'otros' ? 'text-center' :

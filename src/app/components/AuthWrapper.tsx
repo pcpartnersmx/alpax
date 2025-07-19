@@ -24,7 +24,7 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
   return (
     <ProtectedRoute>
       {isAuthenticated && <Navbar />}
-      <main className='pt-20 bg-gray-100'>
+      <main className='max-h-[100vh] overflow-y-auto bg-gray-100'>
         {children}
       </main>
     </ProtectedRoute>

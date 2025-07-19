@@ -48,7 +48,7 @@ export default function Modal({
                     transition={{ duration: 0.3 }}
                 >
                     <motion.div
-                        className={`bg-white rounded-lg shadow-xl p-5 pt-10 ${getSizeClasses()} pb-10 text-center`}
+                        className={`bg-white rounded-lg shadow-xl p-5 pt-10 ${getSizeClasses()} pb-10 text-center relative`}
                         onClick={handleModalClick}
                         initial={{ 
                             scale: 0.8, 
@@ -74,7 +74,7 @@ export default function Modal({
                     >
                         <motion.button 
                             onClick={onClose} 
-                            className="absolute top-2 right-2 z-10 text-gray-400 hover:text-gray-600 transition-colors"
+                            className="absolute top-2 right-2 z-50 text-gray-400 hover:text-gray-600 transition-colors"
                             whileHover={{ scale: 1.1, rotate: 90 }}
                             whileTap={{ scale: 0.9 }}
                             transition={{ duration: 0.2 }}

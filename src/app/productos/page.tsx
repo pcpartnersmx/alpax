@@ -13,6 +13,7 @@ const columns = [
   { key: "area", title: "AREA" },
   { key: "code", title: "CÓDIGO" },
   { key: "name", title: "PRODUCTO" },
+  { key: "quantity", title: "CANTIDAD" },
   { key: "acciones", title: "OTROS" },
 ];
 
@@ -23,6 +24,7 @@ interface Product {
   area: string;
   areaId: string;
   description?: string;
+  quantity: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -364,6 +366,7 @@ export default function ProductosPage() {
                       <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{producto.area}</td>
                       <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{producto.code}</td>
                       <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{producto.name}</td>
+                      <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">{producto.quantity?.toLocaleString() || 0}</td>
                       <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 w-[10%]">
                         <div className="flex items-center gap-3 justify-center">
                           <motion.div

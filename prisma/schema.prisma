@@ -88,7 +88,7 @@ model OrderItem {
   order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId  String
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  batchItems BatchItem[] // Relación con las salidas que llenan este item
+  batchItemOrderItems BatchItemOrderItem[] // Nueva relación muchos a muchos
 }
 
 model Batch {
@@ -131,9 +131,25 @@ model BatchItem {
   container   Container  @relation(fields: [containerId], references: [id], onDelete: Cascade)
   productId   String
   product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItemId String? // Relación opcional con el item del pedido que se está llenando
-  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  // Removemos orderItemId y orderItem para usar la tabla intermedia
+  batchItemOrderItems BatchItemOrderItem[] // Nueva relación muchos a muchos
   notes       Note[] // Notas asociadas a este batch item
+}
+
+// Nueva tabla intermedia para relaciones muchos a muchos
+model BatchItemOrderItem {
+  id          String   @id @default(cuid())
+  quantity    Int      // Cantidad asignada de este batch item a este order item
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  batchItemId String
+  batchItem   BatchItem @relation(fields: [batchItemId], references: [id], onDelete: Cascade)
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@unique([batchItemId, orderItemId]) // Evitar duplicados
 }
 
 model Note {

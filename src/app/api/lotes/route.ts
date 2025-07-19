@@ -6,9 +6,9 @@ import { assignBatchItemToPendingOrders } from '@/lib/assignmentUtils';
 
 // Función para generar el batchNumber automático con formato N-{consecutivo}-{año}
 async function generateBatchNumber(): Promise<string> {
-    const currentYear = new Date().getFullYear();
+    const currentYear = new Date().getFullYear().toString().slice(-2); // Get last 2 digits of year
     
-    // Buscar el último lote del año actual con formato N-XXX-YYYY
+    // Buscar el último lote del año actual con formato N-XXX-YY
     const lastBatch = await prisma.batch.findFirst({
         where: {
             batchNumber: {
@@ -26,7 +26,7 @@ async function generateBatchNumber(): Promise<string> {
     if (lastBatch) {
         // Extraer el consecutivo del último lote
         const match = lastBatch.batchNumber.match(/N-(\d+)-(\d+)/);
-        if (match && parseInt(match[2]) === currentYear) {
+        if (match && parseInt(match[2]) === parseInt(currentYear)) {
             nextConsecutive = parseInt(match[1]) + 1;
         }
     }
@@ -316,11 +316,12 @@ export async function PUT(request: NextRequest) {
 
         // Actualizar en una transacción
         const result = await prisma.$transaction(async (tx) => {
-            // Actualizar el batchItem para asignarlo al pedido
-            const updatedBatchItem = await tx.batchItem.update({
-                where: { id: batchItemId },
+            // Crear la relación en la tabla intermedia
+            const batchItemOrderItem = await tx.batchItemOrderItem.create({
                 data: {
-                    orderItemId: orderItemId
+                    batchItemId: batchItemId,
+                    orderItemId: orderItemId,
+                    quantity: quantity
                 }
             });
 
@@ -381,7 +382,7 @@ export async function PUT(request: NextRequest) {
             });
 
             return {
-                batchItem: updatedBatchItem,
+                batchItemOrderItem: batchItemOrderItem,
                 orderItem: updatedOrderItem,
                 isOrderComplete
             };
@@ -438,9 +439,13 @@ export async function GET(request: NextRequest) {
                                         area: true
                                     }
                                 },
-                                orderItem: {
+                                batchItemOrderItems: {
                                     include: {
-                                        order: true
+                                        orderItem: {
+                                            include: {
+                                                order: true
+                                            }
+                                        }
                                     }
                                 }
                             }

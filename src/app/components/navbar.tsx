@@ -595,9 +595,10 @@ const Navbar = () => {
                     </div>
                     {/* Menú */}
                     <div className="flex gap-8">
-                        <Link href="/resumen" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/resumen' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Resumen</Link>
-                        <Link href="/pedidos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/pedidos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Pedidos</Link>
                         <Link href="/" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Bitácora</Link>
+                        <Link href="/salidas" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/salidas') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Salidas</Link>
+                        <Link href="/pedidos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/pedidos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Pedidos</Link>
+                        <Link href="/resumen" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname === '/resumen' ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Productos</Link>
                         {/* <Link href="/productos" className={`text-[#2A3182] text-xl hover:border-b-2 border-[#2A3182] font-medium ${pathname.startsWith('/productos') ? 'border-b-2 border-[#2A3182] pb-1 font-semibold' : ''}`}>Productos</Link> */}
                     </div>
                 </div>

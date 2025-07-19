@@ -128,7 +128,7 @@ const NotesModal: React.FC<NotesModalProps> = ({
                         <button
                             onClick={handleSaveNote}
                             disabled={!newNote.trim() || saving}
-                            className="px-4 w-[30%] justify-center h-12 mt-auto bg-[#2A3182] text-white rounded-lg hover:bg-[#1a1f5a] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-4 w-[20%] justify-center h-12 mt-auto bg-[#2A3182] text-white rounded-lg hover:bg-[#1a1f5a] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {saving ? (
                                 <>
@@ -199,8 +199,8 @@ const NotesModal: React.FC<NotesModalProps> = ({
             message=""
             body={modalBody}
             onClose={onClose}
-            size="xl"
-            className="max-w-4xl"
+            size="md"
+            // className="max-w-4xl"
         />
     );
 };
